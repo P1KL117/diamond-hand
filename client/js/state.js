@@ -139,15 +139,14 @@ export function playSpecialCard(cardId) {
   switch (card.specialType) {
     case 'pitching_change': {
       burnSpecialCard(cardId);
-      s.discard.push(...s.hand); s.hand = [];
+      dumpHandToDiscard();
       drawCards(side, HAND_SIZE);
       return { kind: 'immediate', msg: '⇄ Pitching change — new hand drawn' };
     }
 
     case 'rain_delay': {
       burnSpecialCard(cardId);
-      s.discard.push(...s.hand); s.hand = [];
-      // Degrade the discard pile in place
+      dumpHandToDiscard();
       s.discard = s.discard.map(c => ({ ...c, result: degradeResult(c.result), degraded: c.degraded + 1 }));
       drawCards(side, HAND_SIZE);
       return { kind: 'immediate', msg: '⛈ Rain delay — discard degraded, new hand drawn' };
