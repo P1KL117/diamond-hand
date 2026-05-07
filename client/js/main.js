@@ -24,7 +24,7 @@ const offsetDate = (d, days) => {
   return dt.toISOString().slice(0, 10);
 };
 
-let viewDate = offsetDate(todayStr(), -1);
+let viewDate = todayStr();
 let pickerGames = [];
 
 // ── Config state ──────────────────────────────────────────────────────────────
