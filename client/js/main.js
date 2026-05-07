@@ -62,7 +62,7 @@ function abbr(t) { return t.abbreviation ?? t.teamCode?.toUpperCase() ?? t.name.
 document.getElementById('btn-prev-day').addEventListener('click', () => { viewDate = offsetDate(viewDate, -1); loadPicker(); });
 document.getElementById('btn-next-day').addEventListener('click', () => {
   const next = offsetDate(viewDate, 1);
-  if (next >= todayStr()) return;
+  if (next > todayStr()) return;
   viewDate = next; loadPicker();
 });
 

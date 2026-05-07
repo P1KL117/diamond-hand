@@ -16,7 +16,7 @@ export function renderDateDisplay(dateStr) {
   document.getElementById('date-display').textContent =
     d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  document.getElementById('btn-next-day').disabled = new Date(dateStr + 'T12:00:00') >= today;
+  document.getElementById('btn-next-day').disabled = new Date(dateStr + 'T12:00:00') > today;
 }
 
 export function renderGameList(games) {
