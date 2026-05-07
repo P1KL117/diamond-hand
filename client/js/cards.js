@@ -3,7 +3,7 @@ const ET_MAP = {
   walk: 'BB', intent_walk: 'BB', hit_by_pitch: 'HBP',
   strikeout: 'K', strikeout_double_play: 'K',
   grounded_into_double_play: 'DP', double_play: 'DP', triple_play: 'DP',
-  field_out: 'flyout', grounded_out: 'groundout', fly_out: 'flyout',
+  field_out: null, grounded_out: 'groundout', fly_out: 'flyout',
   pop_out: 'flyout', line_out: 'lineout',
   fielders_choice_out: 'FC', fielders_choice: 'FC',
   sac_fly: 'sac_fly', sac_fly_double_play: 'sac_fly',
@@ -70,7 +70,13 @@ export function extractCards(feed, side) {
     const ourHalf = wantTop ? isTop : !isTop;
 
     if (play.result?.type === 'atBat' && ourHalf) {
-      const result = ET_MAP[play.result.eventType];
+      let result = ET_MAP[play.result.eventType];
+      if (result === null && play.result.eventType === 'field_out') {
+        // MLB uses field_out generically — disambiguate via result.event
+        const ev = (play.result.event ?? '').toLowerCase();
+        result = (ev.includes('ground') || ev.includes('bunt') || ev.includes('force'))
+          ? 'groundout' : 'flyout';
+      }
       if (!result) continue;
       const id = play.matchup?.batter?.id;
       const name = play.matchup?.batter?.fullName ?? 'Unknown';
