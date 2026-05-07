@@ -293,6 +293,37 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .choice-label { font-size: .9rem; font-weight: 800; color: var(--gold); margin-bottom: 4px; }
 .choice-desc { font-size: .75rem; color: var(--muted); line-height: 1.4; }
 
+/* Upgrade badge */
+.upgrade-badge { font-size: .58rem; background: rgba(34,197,94,.15); color: var(--green); border-radius: 3px; padding: 1px 4px; display: inline-block; align-self: flex-start; }
+
+/* Specials-only note */
+.specials-only-note { width: 100%; color: var(--gold); font-size: .74rem; padding: 4px 2px 6px; opacity: .75; }
+
+/* Tag-up modal */
+.tagup-rows { display: flex; flex-direction: column; gap: 10px; }
+.tagup-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
+.tagup-base { font-size: .88rem; font-weight: 700; color: var(--text); min-width: 100px; }
+.tagup-prob { font-size: .75rem; color: var(--muted); min-width: 70px; }
+.tagup-btns { display: flex; gap: 6px; margin-left: auto; }
+.tagup-btn { background: var(--surface); border: 1px solid var(--border); color: var(--muted); padding: 6px 16px; border-radius: 6px; font-size: .78rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+.tagup-btn.active { border-color: var(--gold); color: var(--gold); background: #1a1505; }
+.tagup-btn.active.hold { border-color: var(--muted); color: var(--text); background: var(--surface2); }
+
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .game-top { max-height: 190px; flex-shrink: 0; }
+  .diamond { width: 116px; height: 116px; }
+  .ticker-log { max-height: 80px; }
+  .ab-card, .special-card { width: 108px; }
+  .picker-header { padding: 20px 16px 12px; }
+  .game-list { padding: 0 14px 24px; }
+  .hand-header { flex-wrap: wrap; row-gap: 4px; }
+  .deck-info { order: 10; width: 100%; }
+  .modal-box { padding: 20px 16px 18px; }
+  .tagup-row { flex-direction: column; align-items: flex-start; }
+  .tagup-btns { margin-left: 0; }
+}
+
 /* ── Misc ─────────────────────────────────────────────────────────────────── */
 .loading-overlay { position: fixed; inset: 0; background: rgba(13,15,20,.85); display: flex; align-items: center; justify-content: center; font-size: 1rem; color: var(--muted); z-index: 100; letter-spacing: .05em; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }

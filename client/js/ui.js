@@ -208,9 +208,11 @@ export function renderDeckInfo() {
   document.getElementById('cycle-count').textContent   = s.deckCycles > 0 ? `Cycle ${s.deckCycles + 1}` : '';
   const btn = document.getElementById('btn-redraw');
   const ready = canRedraw();
+  const hand = state[currentSide()].hand;
+  const hasOnlySpecials = ready && hand.length > 0;
   btn.disabled = !ready;
   btn.classList.toggle('ready', ready);
-  btn.textContent = ready ? '↺ Draw New Hand' : '↺ Redraw';
+  btn.textContent = hasOnlySpecials ? '✕ Discard & Redraw' : (ready ? '↺ Draw New Hand' : '↺ Redraw');
 }
 
 export function renderEventPool() {
@@ -268,7 +270,11 @@ export function renderHand() {
       : '<div class="no-cards">No cards</div>';
     return;
   }
-  el.innerHTML = hand.map(card => {
+  const onlySpecials = hand.every(c => c.type !== 'ab');
+  const specialsNote = onlySpecials
+    ? '<div class="specials-only-note">No AB cards — discard these and redraw</div>'
+    : '';
+  el.innerHTML = specialsNote + hand.map(card => {
     const isRetained = retained && card.id === retained.id;
     if (card.type === 'special') return specialCardHtml(card, discardMode, coachMode, isRetained);
     if (card.type === 'event')   return eventCardHtml(card, discardMode, coachMode);
@@ -282,6 +288,7 @@ function abCardHtml(card, discardMode, coachMode, isRetained = false) {
   const origLabel = (card.degraded > 0 && card.originalResult !== card.result)
     ? `<div class="card-original">${RESULT_LABEL[card.originalResult] ?? card.originalResult}</div>` : '';
   const degradeBadge = card.degraded > 0 ? `<div class="degrade-badge">↓${card.degraded}</div>` : '';
+  const upgradeBadge = card.upgraded ? `<div class="upgrade-badge">⬆</div>` : '';
   const wornClass = card.degraded >= 2 ? 'worn-heavy' : card.degraded === 1 ? 'worn-light' : '';
   const actionClass = (discardMode || coachMode) ? 'target-select' : 'playable';
   const retainedMark = isRetained ? '<div class="retained-pin">📌</div>' : '';
@@ -290,7 +297,7 @@ function abCardHtml(card, discardMode, coachMode, isRetained = false) {
     ${retainedMark}
     <div class="card-player">${card.playerName}</div>
     <div class="card-result">${label}</div>
-    ${origLabel}${degradeBadge}
+    ${origLabel}${degradeBadge}${upgradeBadge}
     <div class="card-desc">${card.description.slice(0, 70)}${card.description.length > 70 ? '…' : ''}</div>
   </button>`;
 }
@@ -353,18 +360,27 @@ export function showPickModal({ title, subtitle, cards, minPick = 1, maxPick = 1
           ${cards.map(card => {
             const sel = selected.has(card.id);
             if (card.type === 'special') {
-              const m = SPECIAL_META[card.specialType] ?? { icon: '★', label: card.specialType };
+              const m = SPECIAL_META[card.specialType] ?? { icon: '★', label: card.specialType ?? '?' };
               return `<button class="pick-card special-mini ${sel ? 'selected' : ''}" data-id="${card.id}">
                 <div>${m.icon} ${m.label}</div>
+                ${sel ? '<div class="pick-check">✓</div>' : ''}
+              </button>`;
+            }
+            if (card.type === 'event') {
+              const m = EVENT_META[card.eventType] ?? { icon: '?', label: card.eventType ?? '?' };
+              return `<button class="pick-card special-mini ${sel ? 'selected' : ''}" data-id="${card.id}">
+                <div>${m.icon} ${m.label}</div>
+                <div style="font-size:.6rem;color:#9ca3af;margin-top:2px">${(card.description ?? '').slice(0, 40)}</div>
                 ${sel ? '<div class="pick-check">✓</div>' : ''}
               </button>`;
             }
             const color = RESULT_COLOR[card.result] ?? 'yellow';
             const label = RESULT_LABEL[card.result] ?? card.result;
             return `<button class="pick-card ab-mini color-${color} ${sel ? 'selected' : ''}" data-id="${card.id}">
-              <div class="pick-player">${card.playerName}</div>
+              <div class="pick-player">${card.playerName ?? ''}</div>
               <div class="pick-result">${label}</div>
               ${card.degraded > 0 ? `<div class="degrade-badge">↓${card.degraded}</div>` : ''}
+              ${card.upgraded ? `<div class="upgrade-badge">⬆</div>` : ''}
               ${sel ? '<div class="pick-check">✓</div>' : ''}
             </button>`;
           }).join('')}
@@ -425,6 +441,56 @@ export function showChoiceModal({ title, subtitle, options }, onChoose) {
       onChoose(options[parseInt(btn.dataset.idx)].value);
     });
   });
+  document.getElementById('app').appendChild(modal);
+}
+
+// ── Tag-up modal (flyout / lineout with runners) ──────────────────────────────
+
+const TAG_PROB_PCT = [50, 65, 80]; // 1st→2nd, 2nd→3rd, 3rd→home
+const TAG_BASE_LABELS = ['1st → 2nd', '2nd → 3rd', '3rd → Home'];
+
+export function showTagUpModal(bases, outs, cardLabel, onConfirm) {
+  const occupiedBases = [2, 1, 0].filter(i => bases[i] && outs < 2); // 3rd first
+  if (!occupiedBases.length) { onConfirm([]); return; }
+
+  const decisions = { 0: false, 1: false, 2: false };
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+
+  const render = () => {
+    modal.innerHTML = `
+      <div class="modal-box modal-choice">
+        <div class="modal-title">TAG UP?</div>
+        <div class="modal-subtitle">${cardLabel}</div>
+        <div class="tagup-rows">
+          ${occupiedBases.map(bi => `
+            <div class="tagup-row">
+              <div class="tagup-base">${TAG_BASE_LABELS[bi]}</div>
+              <div class="tagup-prob">${TAG_PROB_PCT[bi]}% safe</div>
+              <div class="tagup-btns">
+                <button class="tagup-btn${decisions[bi] ? ' active' : ''}" data-base="${bi}" data-val="1">Tag</button>
+                <button class="tagup-btn${!decisions[bi] ? ' active hold' : ''}" data-base="${bi}" data-val="0">Hold</button>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div class="modal-actions">
+          <button id="tagup-confirm" class="btn-primary">Play Ball</button>
+        </div>
+      </div>`;
+
+    modal.querySelectorAll('.tagup-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        decisions[parseInt(btn.dataset.base)] = btn.dataset.val === '1';
+        render();
+      });
+    });
+    modal.querySelector('#tagup-confirm').addEventListener('click', () => {
+      modal.remove();
+      onConfirm(decisions);
+    });
+  };
+
+  render();
   document.getElementById('app').appendChild(modal);
 }
 

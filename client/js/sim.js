@@ -1,6 +1,6 @@
 // bases = [bool, bool, bool]  →  [1st, 2nd, 3rd]
 
-export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3rd, holdRunner3rd } = {}) {
+export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3rd } = {}) {
   const effective = (hitAndRun && (result === 'groundout' || result === 'FC')) ? 'single' : result;
   const b = [...bases];
   const o = outs;
@@ -49,29 +49,10 @@ export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3r
       return { bases: nb, outs: o + 1, runs };
     }
 
-    case 'flyout': {
-      const nb = [...b];
-      let runs = 0;
-      if (b[2] && o < 2) {
-        if (holdRunner3rd) {
-          // runner freezes at 3rd; runner on 2nd can't advance (base blocked)
-        } else {
-          runs++; nb[2] = false;                              // tag up and score
-          if (b[1]) { nb[1] = false; nb[2] = true; }         // runner on 2nd tags to 3rd
-        }
-      } else {
-        if (b[1] && o < 2) { nb[1] = false; nb[2] = true; }  // no runner on 3rd — 2nd advances
-      }
-      return { bases: nb, outs: o + 1, runs };
-    }
-
-    case 'lineout': {
-      const nb = [...b];
-      let runs = 0;
-      if (b[2] && o < 2) { runs++; nb[2] = false; }
-      if (b[1] && o < 2) { nb[1] = false; nb[2] = true; }
-      return { bases: nb, outs: o + 1, runs };
-    }
+    case 'flyout':
+    case 'lineout':
+      // Runner tag-up decisions are resolved in main.js before this is called
+      return { bases: b, outs: o + 1, runs: 0 };
 
     case 'sac_fly': {
       const nb = [...b];

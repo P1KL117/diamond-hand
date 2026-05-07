@@ -98,8 +98,14 @@ export function playABCard(cardId) {
   return card;
 }
 
-export function canRedraw() { return state[currentSide()].hand.length === 0; }
-export function doRedraw() { drawCards(currentSide(), HAND_SIZE); }
+export function canRedraw() {
+  const hand = state[currentSide()].hand;
+  return hand.length === 0 || hand.every(c => c.type !== 'ab');
+}
+export function doRedraw() {
+  if (state[currentSide()].hand.length > 0) dumpHandToDiscard();
+  drawCards(currentSide(), HAND_SIZE);
+}
 
 export function dumpHandToDiscard() {
   const s = state[currentSide()];
@@ -251,7 +257,7 @@ export function commitBattingCoach(specialCardId, targetCardId) {
   state.battingCoachMode = false;
   burnSpecialCard(specialCardId);
   const card = s.hand.find(c => c.id === targetCardId);
-  if (card) card.result = upgradeResult(card.result);
+  if (card) { card.result = upgradeResult(card.result); card.upgraded = true; }
 }
 
 // ── Discard one ───────────────────────────────────────────────────────────────

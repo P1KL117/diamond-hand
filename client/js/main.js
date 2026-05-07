@@ -1,6 +1,6 @@
 import { fetchSchedule, fetchGameFeed } from './api.js';
-import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META } from './cards.js';
-import { processAB, processEvent } from './sim.js';
+import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL } from './cards.js';
+import { processAB, processEvent, hasRunner } from './sim.js';
 import {
   state, resetSides, currentSide,
   drawCards, playABCard, canRedraw, doRedraw,
@@ -13,7 +13,7 @@ import {
 import {
   showScreen, renderDateDisplay, renderGameList, renderTeamSelect,
   renderConfigScreen, renderConfigMode, updateCustomTotal,
-  renderAll, addTickerEntry, renderEndScreen, showPickModal, showChoiceModal,
+  renderAll, addTickerEntry, renderEndScreen, showPickModal, showChoiceModal, showTagUpModal,
 } from './ui.js';
 
 // ── Date ──────────────────────────────────────────────────────────────────────
@@ -260,49 +260,23 @@ document.getElementById('hand-container').addEventListener('click', e => {
 
   if (hitAndRun && (card.result === 'groundout' || card.result === 'FC')) consumeHitAndRun();
 
-  // Groundout: random DP roll + optional send-runner modal
+  // Groundout: random DP roll (no player decision)
   if (card.result === 'groundout' && !hitAndRun) {
     const dpPossible = state.bases[0] && state.outs < 2;
     const isDP = dpPossible && Math.random() < 0.5;
     if (isDP) {
-      finishABPlay(card, 'DP', {}, ' [DOUBLE PLAY!]');
-    } else if (state.bases[2] && state.outs < 2) {
-      showChoiceModal({
-        title: 'RUNNER ON THIRD',
-        subtitle: `${card.playerName} grounds out — send the runner?`,
-        options: [
-          { label: 'Send', desc: '60% scores, 40% thrown out at home.', value: 'send' },
-          { label: 'Hold', desc: 'Runner stays at third. Play it safe.', value: 'hold' },
-        ],
-      }, choice => {
-        const send = choice === 'send';
-        const prevRuns = state.score[currentSide()];
-        finishABPlay(card, 'groundout', { sendRunner3rd: send }, send ? '' : ' [runner holds]');
-        if (send) {
-          const scored = state.score[currentSide()] > prevRuns;
-          const last = document.getElementById('ticker-log').firstChild;
-          if (last && !last.textContent.includes('R')) last.textContent += scored ? ' [runner scores!]' : ' [runner thrown out]';
-        }
-      });
+      showDPResult(true, () => finishABPlay(card, 'DP', {}, ' [DOUBLE PLAY!]'));
     } else {
-      finishABPlay(card, 'groundout', {}, dpPossible ? ' [no DP]' : '');
+      showDPResult(dpPossible ? false : null, () =>
+        finishABPlay(card, 'groundout', {}, dpPossible ? ' [no DP]' : ''));
     }
     return;
   }
 
-  // Flyout: optional tag-up modal when runner on 3rd
-  if (card.result === 'flyout' && state.bases[2] && state.outs < 2) {
-    showChoiceModal({
-      title: 'RUNNER ON THIRD',
-      subtitle: `${card.playerName} flies out — tag up?`,
-      options: [
-        { label: 'Tag up', desc: 'Runner scores. Runner on 2nd also advances.', value: 'tag' },
-        { label: 'Hold', desc: 'Runner stays. Runner on 2nd cannot advance either.', value: 'hold' },
-      ],
-    }, choice => {
-      const hold = choice === 'hold';
-      finishABPlay(card, 'flyout', { holdRunner3rd: hold }, hold ? ' [runner holds]' : '');
-    });
+  // Flyout / lineout: tag-up modal for any occupied base
+  if ((card.result === 'flyout' || card.result === 'lineout') && state.outs < 2 && hasRunner(state.bases)) {
+    const label = `${card.playerName} — ${RESULT_LABEL[card.result] ?? card.result}`;
+    showTagUpModal(state.bases, state.outs, label, decisions => applyFlyoutTagUp(card, decisions));
     return;
   }
 
@@ -400,12 +374,76 @@ function handleSpecialCard(cardId) {
   }
 }
 
+// ── DP roll result modal ──────────────────────────────────────────────────────
+
+function showDPResult(isDP, onContinue) {
+  if (isDP === null) { onContinue(); return; } // no DP possible, skip modal
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box modal-choice" style="max-width:340px;text-align:center">
+      <div class="modal-title">${isDP ? '⚡ DOUBLE PLAY!' : '🎲 No Double Play'}</div>
+      <div class="modal-subtitle">${isDP ? 'Runner on 1st doubled off.' : 'Batter only, runner advances.'}</div>
+      <div class="modal-actions" style="justify-content:center">
+        <button class="btn-primary" id="dp-ok">Continue</button>
+      </div>
+    </div>`;
+  modal.querySelector('#dp-ok').addEventListener('click', () => { modal.remove(); onContinue(); });
+  document.getElementById('app').appendChild(modal);
+}
+
+// ── Flyout / lineout tag-up resolution ────────────────────────────────────────
+
+const TAG_PROB = [0.50, 0.65, 0.80]; // 1st→2nd, 2nd→3rd, 3rd→home
+const BASE_NAMES = ['1st', '2nd', '3rd'];
+
+function applyFlyoutTagUp(card, decisions) {
+  const nb = [...state.bases];
+  let extraOuts = 0, runs = 0;
+  const notes = [];
+
+  for (let bi = 2; bi >= 0; bi--) {
+    if (!state.bases[bi]) continue;
+    if (decisions[bi]) {
+      nb[bi] = false;
+      if (bi === 2) {
+        if (Math.random() < TAG_PROB[2]) { runs++; notes.push('3rd scores'); }
+        else { extraOuts++; notes.push('3rd thrown out'); }
+      } else {
+        const targetOccupied = nb[bi + 1]; // check after higher base resolved
+        if (targetOccupied) {
+          nb[bi] = true; // blocked — auto-hold
+          notes.push(`${BASE_NAMES[bi]} holds (base blocked)`);
+        } else if (Math.random() < TAG_PROB[bi]) {
+          nb[bi + 1] = true;
+          notes.push(`${BASE_NAMES[bi]}→${BASE_NAMES[bi + 1]} safe`);
+        } else {
+          extraOuts++;
+          notes.push(`${BASE_NAMES[bi]} thrown out`);
+        }
+      }
+    }
+  }
+
+  state.outs += 1 + extraOuts;
+  state.bases = nb;
+  addRunsToScore(runs);
+
+  const noteStr = notes.length ? ` [${notes.join(', ')}]` : ' [all hold]';
+  addTickerEntry(`${card.playerName}: ${RESULT_LABEL[card.result] ?? card.result}${noteStr}${runs > 0 ? `  +${runs}R` : ''}`);
+  if (card.description) addTickerEntry(`  "${card.description.slice(0, 80)}"`, 'desc');
+  checkOutMeter(card);
+  if (state.outs >= 3) { endInning(); return; }
+  renderAll();
+}
+
 // ── Redraw ────────────────────────────────────────────────────────────────────
 
 document.getElementById('btn-redraw').addEventListener('click', () => {
   if (!canRedraw() || state.phase !== 'playing') return;
+  const wasSpecialDump = state[currentSide()].hand.length > 0;
   doRedraw();
-  addTickerEntry('↺ New hand drawn', 'divider');
+  addTickerEntry(wasSpecialDump ? '✕ Specials discarded — new hand drawn' : '↺ New hand drawn', 'divider');
   renderAll();
 });
 
