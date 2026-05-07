@@ -290,10 +290,10 @@ function abCardHtml(card, discardMode, coachMode, isRetained = false) {
   const degradeBadge = card.degraded > 0 ? `<div class="degrade-badge">↓${card.degraded}</div>` : '';
   const upgradeBadge = card.upgraded ? `<div class="upgrade-badge">⬆</div>` : '';
   const wornClass = card.degraded >= 2 ? 'worn-heavy' : card.degraded === 1 ? 'worn-light' : '';
-  const actionClass = (discardMode || coachMode) ? 'target-select' : 'playable';
+  const actionClass = discardMode && isRetained ? 'unplayable' : (discardMode || coachMode) ? 'target-select' : 'playable';
   const retainedMark = isRetained ? '<div class="retained-pin">📌</div>' : '';
 
-  return `<button class="ab-card color-${color} ${actionClass} ${wornClass}${isRetained ? ' is-retained' : ''}" data-id="${card.id}" data-type="ab">
+  return `<button class="ab-card color-${color} ${actionClass} ${wornClass}${isRetained ? ' is-retained' : ''}" data-id="${card.id}" data-type="ab" ${discardMode && isRetained ? 'disabled' : ''}>
     ${retainedMark}
     <div class="card-player">${card.playerName}</div>
     <div class="card-result">${label}</div>
@@ -304,9 +304,9 @@ function abCardHtml(card, discardMode, coachMode, isRetained = false) {
 
 function specialCardHtml(card, discardMode, coachMode, isRetained = false) {
   const meta = SPECIAL_META[card.specialType] ?? { label: card.specialType, icon: '★', category: 'SPECIAL', desc: '' };
-  const actionClass = (discardMode || coachMode) ? 'target-select' : 'playable';
+  const actionClass = discardMode && isRetained ? 'unplayable' : (discardMode || coachMode) ? 'target-select' : 'playable';
   const retainedMark = isRetained ? '<div class="retained-pin">📌</div>' : '';
-  return `<button class="special-card ${actionClass}${isRetained ? ' is-retained' : ''}" data-id="${card.id}" data-type="special">
+  return `<button class="special-card ${actionClass}${isRetained ? ' is-retained' : ''}" data-id="${card.id}" data-type="special" ${discardMode && isRetained ? 'disabled' : ''}>
     ${retainedMark}
     <div class="special-category">${meta.category}</div>
     <div class="special-icon">${meta.icon}</div>

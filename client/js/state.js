@@ -265,6 +265,7 @@ export function commitBattingCoach(specialCardId, targetCardId) {
 export function commitDiscardOne(specialCardId, targetCardId) {
   const side = currentSide();
   const s = state[side];
+  if (s.pendingRetain?.id === targetCardId) return; // retained card is protected
   state.discardOneMode = false;
   burnSpecialCard(specialCardId);
   const ti = s.hand.findIndex(c => c.id === targetCardId);
