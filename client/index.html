@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diamond Hand</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- PICKER -->
+  <div id="screen-picker" class="screen active">
+    <div class="picker-header">
+      <h1 class="title">DIAMOND HAND</h1>
+      <div class="date-nav">
+        <button id="btn-prev-day" class="btn-day">‹</button>
+        <span id="date-display" class="date-display"></span>
+        <button id="btn-next-day" class="btn-day">›</button>
+      </div>
+    </div>
+    <div id="game-list" class="game-list"></div>
+  </div>
+
+  <!-- TEAM SELECT -->
+  <div id="screen-team" class="screen">
+    <div class="team-select-wrap">
+      <h2 id="team-select-title" class="team-select-title"></h2>
+      <p class="team-select-hint">Choose your side for the end-screen reveal. You play both halves either way.</p>
+      <div id="team-options" class="team-options"></div>
+      <button id="btn-back-to-picker" class="btn-secondary">← Back to games</button>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div id="screen-config" class="screen">
+    <div class="config-wrap">
+      <div class="config-header">
+        <h2 class="config-title">DECK CONFIGURATION</h2>
+        <div id="config-matchup" class="config-matchup"></div>
+      </div>
+
+      <div id="config-tabs" class="mode-tabs">
+        <button class="mode-tab active" data-mode="game">Based on Game</button>
+        <button class="mode-tab" data-mode="custom">Custom</button>
+        <button class="mode-tab" data-mode="random">Random</button>
+      </div>
+
+      <div id="config-content" class="config-content"></div>
+
+      <div class="config-actions">
+        <button id="btn-config-back" class="btn-secondary">← Back</button>
+        <button id="btn-start-game" class="btn-primary">Start Game →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME -->
+  <div id="screen-game" class="screen">
+    <div class="game-layout">
+
+      <div class="game-top">
+        <div class="diamond-panel">
+          <svg id="diamond-svg" viewBox="0 0 200 200" class="diamond">
+            <rect x="0" y="0" width="200" height="200" fill="#111418" rx="4"/>
+            <polygon points="100,15 185,100 100,185 15,100" fill="none" stroke="#2a2d3e" stroke-width="1.5"/>
+            <line x1="100" y1="185" x2="185" y2="100" stroke="#2a2d3e" stroke-width="1"/>
+            <line x1="100" y1="185" x2="15"  y2="100" stroke="#2a2d3e" stroke-width="1"/>
+            <line x1="15"  y1="100" x2="100" y2="15"  stroke="#2a2d3e" stroke-width="1"/>
+            <line x1="185" y1="100" x2="100" y2="15"  stroke="#2a2d3e" stroke-width="1"/>
+            <circle cx="100" cy="100" r="6" fill="#1e2030" stroke="#333" stroke-width="1"/>
+            <rect id="base-1" x="177" y="90" width="16" height="16" rx="2" fill="#2a2d3e" stroke="#444"/>
+            <rect id="base-2" x="92"  y="4"  width="16" height="16" rx="2" fill="#2a2d3e" stroke="#444"/>
+            <rect id="base-3" x="7"   y="90" width="16" height="16" rx="2" fill="#2a2d3e" stroke="#444"/>
+            <polygon id="base-home" points="100,182 110,192 100,200 90,192" fill="#2a2d3e" stroke="#444"/>
+            <circle id="runner-1" cx="185" cy="98" r="7" fill="#f59e0b" opacity="0"/>
+            <circle id="runner-2" cx="100" cy="12"  r="7" fill="#f59e0b" opacity="0"/>
+            <circle id="runner-3" cx="15"  cy="98" r="7" fill="#f59e0b" opacity="0"/>
+          </svg>
+          <div class="game-status">
+            <div id="inning-display" class="inning-display">▲ 1st</div>
+            <div class="outs-row">
+              <span class="out-label">OUT</span>
+              <span class="out-dot" id="out-0"></span>
+              <span class="out-dot" id="out-1"></span>
+              <span class="out-dot" id="out-2"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="right-panel">
+          <div id="scoreboard" class="scoreboard"></div>
+          <div class="ticker">
+            <div class="ticker-title">PLAY BY PLAY</div>
+            <div id="ticker-log" class="ticker-log"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-block">
+        <div class="section-label">BONUS POOL</div>
+        <div id="event-pool" class="event-pool"></div>
+      </div>
+
+      <div class="section-block hand-section">
+        <div class="hand-header">
+          <div class="section-label">HAND</div>
+          <div id="out-meter" class="out-meter"></div>
+          <button id="btn-menu" class="btn-menu">← Menu</button>
+          <div class="deck-info">
+            <span id="deck-count">Deck —</span>
+            <span id="discard-count">Discard —</span>
+            <span id="burned-count">Burned 0</span>
+            <span id="cycle-count" class="cycle-badge"></span>
+          </div>
+          <button id="btn-redraw" class="btn-redraw" disabled>↺ Redraw</button>
+        </div>
+        <div id="hand-mode-banner" class="hand-mode-banner" style="display:none"></div>
+        <div id="hand-container" class="hand-container"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- END -->
+  <div id="screen-end" class="screen">
+    <div class="end-wrap">
+      <h1 class="title">GAME OVER</h1>
+      <div id="end-verdict" class="end-verdict"></div>
+      <div id="end-boxscore" class="end-boxscore"></div>
+      <button id="btn-play-again" class="btn-primary">Play Another Game</button>
+    </div>
+  </div>
+
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
