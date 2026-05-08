@@ -182,7 +182,8 @@ function startGame(feed, specials) {
   const ids = [...new Set(allPlays.map(p => p.matchup?.batter?.id).filter(Boolean))];
   if (ids.length) fetchPlayerStats(ids).then(s => { state.playerStats = s; });
 
-  drawCards('away', 7);
+  // Only draw for player-controlled sides — opponent pops from deck directly
+  if (state.gameMode === 'solitaire' || state.playerSide === 'away') drawCards('away', 7);
   showScreen('game');
   renderAll();
   addTickerEntry('Play ball!', 'divider');
@@ -648,8 +649,10 @@ document.getElementById('event-pool').addEventListener('click', e => {
 
 function endInning() {
   const half = state.isTop ? 'Top' : 'Bot', inning = state.inning;
+  const skipBottom = state.isTop && state.inning === 9 && state.score.home > state.score.away;
   endHalfInning();
   addTickerEntry(`─── End ${half} ${inning} ───`, 'divider');
+  if (skipBottom) { addTickerEntry('─── Home leads — no bottom 9th ───', 'divider'); endGame(); return; }
   if (isGameOver()) { endGame(); return; }
   renderAll();
   if (state.gameMode === 'single' && currentSide() !== state.playerSide) {

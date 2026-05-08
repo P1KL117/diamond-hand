@@ -300,8 +300,9 @@ export function endHalfInning() {
   state.outs = 0;
   state.bases = [false, false, false];
   state.baseRunners = [null, null, null];
-  if (state.isTop) { state.isTop = false; drawCards('home', HAND_SIZE); }
-  else { state.inning++; state.isTop = true; if (state.inning <= 9) drawCards('away', HAND_SIZE); }
+  const controlled = s => state.gameMode === 'solitaire' || state.playerSide === s;
+  if (state.isTop) { state.isTop = false; if (controlled('home')) drawCards('home', HAND_SIZE); }
+  else { state.inning++; state.isTop = true; if (state.inning <= 9 && controlled('away')) drawCards('away', HAND_SIZE); }
 }
 
 export function isGameOver() { return state.inning > 9; }
