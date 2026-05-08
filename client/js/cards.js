@@ -84,7 +84,7 @@ export function extractCards(feed, side) {
       if (!seenBatters.has(id)) { seenBatters.add(id); battingOrder.push({ id, name }); }
       abCards.push({
         id: `ab-${seq++}`, type: 'ab',
-        playerName: name, result, originalResult: result,
+        playerId: id, playerName: name, result, originalResult: result,
         description: play.result?.description ?? '',
         inning: play.about?.inning ?? 0, degraded: 0,
       });

@@ -1,4 +1,4 @@
-import { fetchSchedule, fetchGameFeed } from './api.js';
+import { fetchSchedule, fetchGameFeed, fetchPlayerStats } from './api.js';
 import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL } from './cards.js';
 import { processAB, processEvent, hasRunner } from './sim.js';
 import {
@@ -80,6 +80,7 @@ document.getElementById('btn-back-to-picker').addEventListener('click', () => sh
 
 document.getElementById('team-options').addEventListener('click', async e => {
   const btn = e.target.closest('.team-btn'); if (!btn) return;
+  state.gameMode  = btn.dataset.mode ?? 'solitaire';
   state.playerSide = btn.dataset.side;
 
   const overlay = Object.assign(document.createElement('div'), {
@@ -150,13 +151,20 @@ document.getElementById('btn-config-back').addEventListener('click', () => showS
 
 function startGame(feed, specials) {
   resetSides();
+  state.playerStats = {};
+
   for (const side of ['away', 'home']) {
     const { abCards, deckEventCards, eventCards, battingOrder } = extractCards(feed, side);
-    const sideSpecials = specials.map((c, i) => ({ ...c, id: `${c.id}-${side}-${i}` }));
-    state[side].deck        = shuffle([...abCards, ...deckEventCards, ...sideSpecials]);
+    const isControlled = state.gameMode === 'solitaire' || side === state.playerSide;
+    const sideSpecials = isControlled ? specials.map((c, i) => ({ ...c, id: `${c.id}-${side}-${i}` })) : [];
+    // Opponent deck: ordered (no shuffle) so auto-play replays game sequence; no specials
+    state[side].deck        = isControlled
+      ? shuffle([...abCards, ...deckEventCards, ...sideSpecials])
+      : [...abCards].reverse(); // reversed so deck.pop() gives first AB
     state[side].eventCards  = eventCards;
     state[side].battingOrder = battingOrder;
   }
+
   state.inning = 1; state.isTop = true; state.outs = 0;
   state.bases = [false, false, false];
   state.score = { home: 0, away: 0 };
@@ -168,10 +176,20 @@ function startGame(feed, specials) {
   state.battingCoachMode = false;
   state.retainMode = false;
 
+  // Fetch player stats in background for DP/SB probability
+  const allPlays = feed?.liveData?.plays?.allPlays ?? [];
+  const ids = [...new Set(allPlays.map(p => p.matchup?.batter?.id).filter(Boolean))];
+  if (ids.length) fetchPlayerStats(ids).then(s => { state.playerStats = s; });
+
   drawCards('away', 7);
   showScreen('game');
   renderAll();
   addTickerEntry('Play ball!', 'divider');
+
+  // If away team is opponent, start auto-play immediately
+  if (state.gameMode === 'single' && state.playerSide === 'home') {
+    setTimeout(autoPlayOpponentAB, 900);
+  }
 }
 
 // ── Out meter ─────────────────────────────────────────────────────────────────
@@ -263,7 +281,9 @@ document.getElementById('hand-container').addEventListener('click', e => {
   // Groundout: random DP roll (no player decision)
   if (card.result === 'groundout' && !hitAndRun) {
     const dpPossible = state.bases[0] && state.outs < 2;
-    const isDP = dpPossible && Math.random() < 0.5;
+    const goAo = state.playerStats[card.playerId]?.goAoRatio ?? 1.0;
+    const dpChance = Math.min(0.75, Math.max(0.20, goAo * 0.45));
+    const isDP = dpPossible && Math.random() < dpChance;
     if (isDP) {
       showDPResult(true, () => finishABPlay(card, 'DP', {}, ' [DOUBLE PLAY!]'));
     } else {
@@ -374,6 +394,75 @@ function handleSpecialCard(cardId) {
   }
 }
 
+// ── Opponent auto-play (single team mode) ─────────────────────────────────────
+
+function resolveOpponentAB(card) {
+  const b = state.bases, o = state.outs;
+  let result = card.result;
+
+  // DP roll using batter stats
+  if (result === 'groundout' && b[0] && o < 2) {
+    const goAo = state.playerStats[card.playerId]?.goAoRatio ?? 1.0;
+    if (Math.random() < Math.min(0.75, Math.max(0.20, goAo * 0.45))) result = 'DP';
+  }
+
+  const nb = [...b]; let runs = 0;
+  switch (result) {
+    case 'HR':      return { bases:[false,false,false], outs:o,   runs:b.filter(Boolean).length+1, result };
+    case 'triple':  return { bases:[false,false,true],  outs:o,   runs:b.filter(Boolean).length,   result };
+    case 'double': { const r=(b[1]?1:0)+(b[2]?1:0); return { bases:[false,true,b[0]], outs:o, runs:r, result }; }
+    case 'single':  return { bases:[true,b[0],b[1]],   outs:o,   runs:b[2]?1:0, result };
+    case 'BB': case 'HBP': {
+      const r=(b[0]&&b[1]&&b[2])?1:0;
+      return { bases:[true,b[0]||false,(b[0]&&b[1])?true:b[2]], outs:o, runs:r, result };
+    }
+    case 'K':  return { bases:b, outs:o+1, runs:0, result };
+    case 'DP': return { bases:[false,b[1],b[2]], outs:o+2, runs:0, result };
+    case 'FC': return { bases:[true,b[1],b[2]],  outs:o+1, runs:0, result };
+    case 'sac_fly': {
+      if (nb[2]) { runs++; nb[2]=false; }
+      return { bases:nb, outs:o+1, runs, result };
+    }
+    case 'groundout': {
+      if (nb[2]&&o<2){ runs++; nb[2]=false; }
+      if (nb[0]){ nb[0]=false; nb[1]=true; }
+      return { bases:nb, outs:o+1, runs, result };
+    }
+    case 'flyout': case 'lineout': {
+      if (nb[2]&&o<2){ runs++; nb[2]=false; }
+      else if (nb[1]&&o<2){ nb[1]=false; nb[2]=true; }
+      return { bases:nb, outs:o+1, runs, result };
+    }
+    default: return { bases:b, outs:o+1, runs:0, result };
+  }
+}
+
+function autoPlayOpponentAB() {
+  if (state.phase !== 'playing') return;
+  if (state.gameMode !== 'single') return;
+  const side = currentSide();
+  if (side === state.playerSide) return; // player's turn now
+
+  if (state.outs >= 3) { endInning(); return; }
+
+  const s = state[side];
+  const card = s.deck.pop();
+  if (!card) { endInning(); return; }
+  s.discard.push(card);
+  s.batterIndex++;
+
+  const { bases, outs, runs, result } = resolveOpponentAB(card);
+  state.bases = bases; state.outs = outs; addRunsToScore(runs);
+
+  const dpNote = result === 'DP' && card.result !== 'DP' ? ' [DP]' : '';
+  addTickerEntry(`  ${card.playerName}: ${RESULT_LABEL[result] ?? result}${dpNote}${runs > 0 ? `  +${runs}R` : ''}`, 'auto-play');
+
+  renderAll();
+
+  if (state.outs >= 3) setTimeout(endInning, 600);
+  else setTimeout(autoPlayOpponentAB, 720);
+}
+
 // ── DP roll result modal ──────────────────────────────────────────────────────
 
 function showDPResult(isDP, onContinue) {
@@ -469,6 +558,9 @@ function endInning() {
   addTickerEntry(`─── End ${half} ${inning} ───`, 'divider');
   if (isGameOver()) { endGame(); return; }
   renderAll();
+  if (state.gameMode === 'single' && currentSide() !== state.playerSide) {
+    setTimeout(autoPlayOpponentAB, 900);
+  }
 }
 
 function endGame() {

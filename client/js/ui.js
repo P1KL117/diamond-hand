@@ -55,14 +55,29 @@ export function renderGameList(games) {
 export function renderTeamSelect(game) {
   document.getElementById('team-select-title').textContent = `${game.awayTeam.name} @ ${game.homeTeam.name}`;
   document.getElementById('team-options').innerHTML = `
-    <button class="team-btn" data-side="away">
-      <div class="team-btn-label">AWAY</div>
-      <div class="team-btn-name">${game.awayTeam.name}</div>
-    </button>
-    <button class="team-btn" data-side="home">
-      <div class="team-btn-label">HOME</div>
-      <div class="team-btn-name">${game.homeTeam.name}</div>
-    </button>`;
+    <div class="team-mode-group">
+      <div class="team-mode-heading">PLAY ONE TEAM</div>
+      <div class="team-mode-row">
+        <button class="team-btn" data-side="away" data-mode="single">
+          <div class="team-btn-label">AWAY</div>
+          <div class="team-btn-name">${game.awayTeam.name}</div>
+          <div class="team-btn-hint">Opponent auto-replays</div>
+        </button>
+        <button class="team-btn" data-side="home" data-mode="single">
+          <div class="team-btn-label">HOME</div>
+          <div class="team-btn-name">${game.homeTeam.name}</div>
+          <div class="team-btn-hint">Opponent auto-replays</div>
+        </button>
+      </div>
+    </div>
+    <div class="team-mode-group">
+      <div class="team-mode-heading">SOLITAIRE</div>
+      <button class="team-btn team-btn-wide" data-side="away" data-mode="solitaire">
+        <div class="team-btn-label">PLAY BOTH SIDES</div>
+        <div class="team-btn-name">${game.awayTeam.name} vs ${game.homeTeam.name}</div>
+        <div class="team-btn-hint">Classic mode — you control both teams</div>
+      </button>
+    </div>`;
 }
 
 // ── Config screen ─────────────────────────────────────────────────────────────
@@ -241,6 +256,17 @@ export function renderOutMeter() {
 
 export function renderHand() {
   const side = currentSide();
+  // Auto-play mode — opponent's turn
+  if (state.gameMode === 'single' && side !== state.playerSide) {
+    const el = document.getElementById('hand-container');
+    el.className = 'hand-container';
+    document.getElementById('hand-mode-banner').style.display = 'none';
+    const teamName = side === 'away'
+      ? state.selectedGame?.awayTeam?.name
+      : state.selectedGame?.homeTeam?.name;
+    el.innerHTML = `<div class="auto-play-msg">⚡ ${teamName ?? 'Opponent'} batting…</div>`;
+    return;
+  }
   const hand = state[side].hand;
   const discardMode = state.discardOneMode;
   const coachMode = state.battingCoachMode;

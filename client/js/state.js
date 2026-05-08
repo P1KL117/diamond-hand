@@ -18,6 +18,8 @@ export const state = {
   phase: 'picker',
   selectedGame: null,
   playerSide: null,
+  gameMode: 'solitaire',   // 'solitaire' | 'single'
+  playerStats: {},         // playerId → { goAoRatio, sbPct }
 
   home: makeSide(),
   away: makeSide(),

@@ -30,6 +30,30 @@ app.get('/api/game/:gamePk/feed', async (req, res) => {
   }
 });
 
+app.get('/api/players/stats', async (req, res) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) return res.json({});
+    const url = `${MLB}/api/v1/people?personIds=${ids}&hydrate=stats(group=hitting,type=season)`;
+    const data = await fetch(url).then(r => r.json());
+    const stats = {};
+    for (const p of data.people ?? []) {
+      const split = p.stats
+        ?.find(s => s.group?.displayName === 'hitting' && s.type?.displayName === 'season')
+        ?.splits?.[0]?.stat;
+      if (split) {
+        stats[p.id] = {
+          goAoRatio: parseFloat(split.groundOutsToAiroutsRatio) || 1.0,
+          sbPct:     parseFloat(split.stolenBasePercentage)     || 0.70,
+        };
+      }
+    }
+    res.json(stats);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Diamond Hand → http://localhost:${PORT}`);
 });

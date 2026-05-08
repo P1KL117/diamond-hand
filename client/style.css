@@ -48,14 +48,19 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* ── TEAM SELECT ──────────────────────────────────────────────────────────── */
 #screen-team { align-items: center; justify-content: center; }
-.team-select-wrap { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 40px; }
+.team-select-wrap { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 40px; }
 .team-select-title { font-size: 1.2rem; font-weight: 600; }
 .team-select-hint { color: var(--muted); font-size: .82rem; line-height: 1.5; }
-.team-options { display: flex; gap: 20px; }
-.team-btn { background: var(--surface); border: 2px solid var(--border); color: inherit; border-radius: var(--radius); padding: 24px 40px; cursor: pointer; transition: border-color .15s, background .15s; min-width: 160px; }
+.team-options { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 500px; }
+.team-mode-group { display: flex; flex-direction: column; gap: 10px; }
+.team-mode-heading { font-size: .6rem; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; text-align: left; }
+.team-mode-row { display: flex; gap: 12px; }
+.team-btn { background: var(--surface); border: 2px solid var(--border); color: inherit; border-radius: var(--radius); padding: 18px 24px; cursor: pointer; transition: border-color .15s, background .15s; flex: 1; text-align: left; }
 .team-btn:hover { border-color: var(--gold); background: var(--surface2); }
-.team-btn-label { font-size: .65rem; letter-spacing: .12em; color: var(--muted); margin-bottom: 6px; }
-.team-btn-name { font-size: 1rem; font-weight: 700; }
+.team-btn-wide { width: 100%; }
+.team-btn-label { font-size: .62rem; letter-spacing: .12em; color: var(--muted); margin-bottom: 4px; }
+.team-btn-name { font-size: .95rem; font-weight: 700; }
+.team-btn-hint { font-size: .68rem; color: var(--muted); margin-top: 4px; }
 
 /* ── CONFIG SCREEN ────────────────────────────────────────────────────────── */
 #screen-config { align-items: center; justify-content: flex-start; }
@@ -143,6 +148,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .ticker-entry.desc { color: var(--muted); font-style: italic; font-size: .74rem; padding-left: 8px; }
 .ticker-entry.divider { color: var(--muted); font-size: .7rem; letter-spacing: .06em; }
 .ticker-entry.special-play { color: #c4b5fd; font-size: .78rem; }
+.ticker-entry.auto-play { color: #94a3b8; font-size: .78rem; padding-left: 6px; }
 
 /* ── BATTER BAR ───────────────────────────────────────────────────────────── */
 .batter-bar { display: flex; align-items: center; gap: 10px; padding: 6px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
@@ -184,6 +190,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .hand-mode-banner { padding: 6px 10px; background: #1a1024; border: 1px solid var(--special-border); border-radius: 6px; color: #c4b5fd; font-size: .78rem; font-weight: 600; margin-bottom: 8px; }
 .hand-container { display: flex; flex-wrap: wrap; gap: 10px; padding-bottom: 8px; }
 .no-cards, .hand-empty-msg { color: var(--muted); font-size: .82rem; padding: 6px 0; }
+.auto-play-msg { color: #60a5fa; font-size: .9rem; font-weight: 600; padding: 12px 4px; letter-spacing: .04em; }
 .hand-empty-msg { color: var(--gold); }
 
 /* Selection modes */

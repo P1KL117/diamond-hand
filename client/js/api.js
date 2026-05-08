@@ -10,6 +10,12 @@ export async function fetchGameFeed(gamePk) {
   return res.json();
 }
 
+export async function fetchPlayerStats(ids) {
+  if (!ids.length) return {};
+  const res = await fetch(`/api/players/stats?ids=${ids.join(',')}`);
+  return res.ok ? res.json() : {};
+}
+
 export function yesterday() {
   const d = new Date();
   d.setDate(d.getDate() - 1);
