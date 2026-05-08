@@ -14,7 +14,7 @@ import {
   showScreen, renderDateDisplay, renderGameList, renderTeamSelect,
   renderConfigScreen, renderConfigMode, updateCustomTotal,
   renderAll, addTickerEntry, clearTicker, renderEndScreen, showPickModal, showChoiceModal, showTagUpModal,
-  showRainDelayModal,
+  showRainDelayModal, setupRunnerTooltip,
 } from './ui.js';
 
 // ── Date ──────────────────────────────────────────────────────────────────────
@@ -929,5 +929,6 @@ document.getElementById('btn-menu').addEventListener('click', () => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+setupRunnerTooltip();
 showScreen('picker');
 loadPicker();

@@ -237,17 +237,11 @@ export function renderDiamond() {
   [[`runner-1`, r1, runners[0]], [`runner-2`, r2, runners[1]], [`runner-3`, r3, runners[2]]].forEach(([id, on, runner]) => {
     const el = document.getElementById(id);
     el.style.opacity = on ? '1' : '0';
-    // SVG circles require a child <title> element for browser hover tooltips
-    let svgTitle = el.querySelector('title');
     if (on && runner?.playerName) {
       const spd = Math.round((runner.sbPct ?? 0.70) * 100);
-      if (!svgTitle) {
-        svgTitle = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-        el.appendChild(svgTitle);
-      }
-      svgTitle.textContent = `${runner.playerName}  ·  Speed ${spd}%`;
-    } else if (svgTitle) {
-      svgTitle.remove();
+      el.dataset.runnerTip = `${runner.playerName}  ·  Speed ${spd}%`;
+    } else {
+      delete el.dataset.runnerTip;
     }
   });
   [[`base-1`,r1],[`base-2`,r2],[`base-3`,r3]].forEach(([id, on]) => {
@@ -681,4 +675,30 @@ export function renderEndScreen(yourScore, realScore) {
 export function renderAll() {
   renderScoreboard(); renderDiamond(); renderGameStatus();
   renderDeckInfo(); renderEventPool(); renderHand(); renderOutMeter();
+}
+
+// ── Runner speed tooltip (custom JS — SVG native title is too unreliable) ──────
+
+export function setupRunnerTooltip() {
+  const tip = document.createElement('div');
+  tip.className = 'runner-tooltip';
+  document.body.appendChild(tip);
+
+  const RUNNER_IDS = new Set(['runner-1', 'runner-2', 'runner-3']);
+
+  document.getElementById('diamond-svg').addEventListener('mousemove', e => {
+    const target = e.target;
+    if (!target || !RUNNER_IDS.has(target.id) || !target.dataset.runnerTip) {
+      tip.style.display = 'none';
+      return;
+    }
+    tip.textContent = target.dataset.runnerTip;
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top  = (e.clientY - 32) + 'px';
+  });
+
+  document.getElementById('diamond-svg').addEventListener('mouseleave', () => {
+    tip.style.display = 'none';
+  });
 }
