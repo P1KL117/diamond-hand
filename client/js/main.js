@@ -1,5 +1,5 @@
 import { fetchSchedule, fetchGameFeed, fetchPlayerStats } from './api.js';
-import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL, upgradeResult } from './cards.js';
+import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, buildEventCardsFromCounts, EVENT_CARD_TYPES, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL, upgradeResult } from './cards.js';
 import { processAB, processEvent, hasRunner } from './sim.js';
 import {
   state, resetSides, currentSide,
@@ -33,6 +33,7 @@ let pickerGames = [];
 let configMode = 'game';
 let seededSpecials = [];
 let customCounts = Object.fromEntries(ALL_SPECIAL_TYPES.map(t => [t, 0]));
+let customEventCounts = Object.fromEntries(EVENT_CARD_TYPES.map(t => [t, 0]));
 let randomCount = 5;
 let pendingFeed = null;
 
@@ -95,6 +96,7 @@ document.getElementById('team-options').addEventListener('click', async e => {
     pendingFeed = feed;
     seededSpecials = computeSeededSpecials(feed, state.playerSide);
     customCounts = Object.fromEntries(ALL_SPECIAL_TYPES.map(t => [t, 0]));
+    customEventCounts = Object.fromEntries(EVENT_CARD_TYPES.map(t => [t, 0]));
     configMode = 'game';
     renderConfigScreen(state.selectedGame, state.playerSide, seededSpecials);
     showScreen('config');
@@ -110,7 +112,7 @@ document.getElementById('team-options').addEventListener('click', async e => {
 document.getElementById('config-tabs').addEventListener('click', e => {
   const tab = e.target.closest('.mode-tab'); if (!tab) return;
   configMode = tab.dataset.mode;
-  renderConfigMode(configMode, seededSpecials, customCounts, randomCount);
+  renderConfigMode(configMode, seededSpecials, customCounts, randomCount, customEventCounts);
 });
 
 document.getElementById('config-content').addEventListener('input', e => {
@@ -122,6 +124,13 @@ document.getElementById('config-content').addEventListener('input', e => {
     if (total) total.textContent = `${randomCount} card${randomCount !== 1 ? 's' : ''} — types drawn randomly at game start`;
     return;
   }
+  if (e.target.classList.contains('event-slider')) {
+    const type = e.target.dataset.type;
+    customEventCounts[type] = parseInt(e.target.value);
+    const sv = document.getElementById(`ev-sv-${type}`);
+    if (sv) sv.textContent = customEventCounts[type];
+    return;
+  }
   if (!e.target.classList.contains('special-slider')) return;
   const type = e.target.dataset.type;
   const val = parseInt(e.target.value);
@@ -129,8 +138,8 @@ document.getElementById('config-content').addEventListener('input', e => {
   const sv = document.getElementById(`sv-${type}`);
   if (sv) sv.textContent = val;
   const total = updateCustomTotal(customCounts);
-  if (total > 8) {
-    customCounts[type] = Math.max(0, val - (total - 8));
+  if (total > 12) {
+    customCounts[type] = Math.max(0, val - (total - 12));
     e.target.value = customCounts[type];
     if (sv) sv.textContent = customCounts[type];
     updateCustomTotal(customCounts);
@@ -143,14 +152,17 @@ document.getElementById('btn-start-game').addEventListener('click', () => {
     : configMode === 'custom'
     ? buildSpecialsFromCounts(customCounts)
     : buildRandomSpecials(randomCount);
-  startGame(pendingFeed, specials);
+  const extraEventCards = configMode === 'custom'
+    ? buildEventCardsFromCounts(customEventCounts)
+    : [];
+  startGame(pendingFeed, specials, extraEventCards);
 });
 
 document.getElementById('btn-config-back').addEventListener('click', () => showScreen('team'));
 
 // ── Game start ────────────────────────────────────────────────────────────────
 
-function startGame(feed, specials) {
+function startGame(feed, specials, extraEventCards = []) {
   resetSides();
   state.playerStats = {};
 
@@ -159,8 +171,11 @@ function startGame(feed, specials) {
     const isControlled = state.gameMode === 'solitaire' || side === state.playerSide;
     const sideSpecials = isControlled ? specials.map((c, i) => ({ ...c, id: `${c.id}-${side}-${i}` })) : [];
     // Opponent deck: ordered (no shuffle) so auto-play replays game sequence; no specials
+    const extraEvs = isControlled
+      ? extraEventCards.map((c, i) => ({ ...c, id: `${c.id}-${side}-${i}` }))
+      : [];
     state[side].deck        = isControlled
-      ? shuffle([...abCards, ...deckEventCards, ...sideSpecials])
+      ? shuffle([...abCards, ...deckEventCards, ...extraEvs, ...sideSpecials])
       : [...abCards].reverse(); // reversed so deck.pop() gives first AB
     state[side].eventCards  = eventCards;
     state[side].battingOrder = battingOrder;

@@ -1,5 +1,5 @@
 import { state, currentSide, currentBatter, currentBatterSlot, canRedraw, getActiveEventCards } from './state.js';
-import { RESULT_COLOR, RESULT_LABEL, SPECIAL_META, ALL_SPECIAL_TYPES } from './cards.js';
+import { RESULT_COLOR, RESULT_LABEL, SPECIAL_META, ALL_SPECIAL_TYPES, EVENT_CARD_TYPES } from './cards.js';
 import { hasRunner } from './sim.js';
 
 // ── Screens ───────────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ export function renderConfigScreen(game, side, seededSpecials) {
   renderConfigMode('game', seededSpecials, {});
 }
 
-export function renderConfigMode(mode, seededSpecials, customCounts, randomCount = 5) {
+export function renderConfigMode(mode, seededSpecials, customCounts, randomCount = 5, customEventCounts = {}) {
   const contentEl = document.getElementById('config-content');
   document.querySelectorAll('.mode-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.mode === mode));
@@ -119,20 +119,38 @@ export function renderConfigMode(mode, seededSpecials, customCounts, randomCount
         <div class="config-total">${total} special card${total !== 1 ? 's' : ''} will be shuffled into your deck</div>`;
     }
   } else if (mode === 'custom') {
-    const MAX_EACH = 3;
-    const currentCounts = { ...customCounts };
+    const evInfo = {
+      SB:    { icon: '→', label: 'Stolen Base', desc: 'Advances a runner one base when played from pool.' },
+      WP:    { icon: '~', label: 'Wild Pitch',  desc: 'Advances all runners one base when played from pool.' },
+      PB:    { icon: '~', label: 'Passed Ball', desc: 'Advances all runners one base when played from pool.' },
+      ERROR: { icon: '⬆', label: 'Error',       desc: 'Upgrade a hand card one level when played from pool.' },
+    };
     contentEl.innerHTML = `
       <div class="custom-sliders">
+        <div class="slider-section-label">Special Cards</div>
         ${ALL_SPECIAL_TYPES.map(type => {
           const m = SPECIAL_META[type];
-          const val = currentCounts[type] ?? 0;
+          const val = customCounts[type] ?? 0;
           return `<div class="slider-row">
             <span class="slider-icon">${m.icon}</span>
             <span class="slider-label">${m.label}</span>
             <span class="tip-icon" data-tip="${m.desc}">ⓘ</span>
             <input type="range" class="special-slider" data-type="${type}"
-              min="0" max="${MAX_EACH}" value="${val}" step="1">
+              min="0" max="4" value="${val}" step="1">
             <span class="slider-val" id="sv-${type}">${val}</span>
+          </div>`;
+        }).join('')}
+        <div class="slider-section-label" style="margin-top:.75rem">Event Cards (drawn → bonus pool)</div>
+        ${EVENT_CARD_TYPES.map(type => {
+          const m = evInfo[type];
+          const val = customEventCounts[type] ?? 0;
+          return `<div class="slider-row">
+            <span class="slider-icon">${m.icon}</span>
+            <span class="slider-label">${m.label}</span>
+            <span class="tip-icon" data-tip="${m.desc}">ⓘ</span>
+            <input type="range" class="event-slider" data-type="${type}"
+              min="0" max="4" value="${val}" step="1">
+            <span class="slider-val" id="ev-sv-${type}">${val}</span>
           </div>`;
         }).join('')}
       </div>
@@ -145,7 +163,7 @@ export function renderConfigMode(mode, seededSpecials, customCounts, randomCount
         <div class="random-row">
           <span class="random-label">How many special cards?</span>
           <input type="range" class="random-slider" id="random-count-slider"
-            min="1" max="9" value="${randomCount}" step="1">
+            min="1" max="12" value="${randomCount}" step="1">
           <span class="random-val" id="rv-random">${randomCount}</span>
         </div>
         <div class="config-total" id="random-total-display">${randomCount} card${randomCount !== 1 ? 's' : ''} — types drawn randomly at game start</div>
@@ -156,7 +174,7 @@ export function renderConfigMode(mode, seededSpecials, customCounts, randomCount
 export function updateCustomTotal(counts) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const el = document.getElementById('custom-total-display');
-  if (el) el.textContent = `${total} / 8 special cards`;
+  if (el) el.textContent = `${total} / 12 special cards`;
   return total;
 }
 
@@ -188,8 +206,16 @@ export function renderScoreboard() {
 
 export function renderDiamond() {
   const [r1, r2, r3] = state.bases;
-  [[`runner-1`,r1],[`runner-2`,r2],[`runner-3`,r3]].forEach(([id, on]) => {
-    document.getElementById(id).style.opacity = on ? '1' : '0';
+  const runners = state.baseRunners;
+  [[`runner-1`, r1, runners[0]], [`runner-2`, r2, runners[1]], [`runner-3`, r3, runners[2]]].forEach(([id, on, runner]) => {
+    const el = document.getElementById(id);
+    el.style.opacity = on ? '1' : '0';
+    if (on && runner?.playerName) {
+      const spd = Math.round((runner.sbPct ?? 0.70) * 100);
+      el.setAttribute('title', `${runner.playerName}  |  Speed ${spd}%`);
+    } else {
+      el.removeAttribute('title');
+    }
   });
   [[`base-1`,r1],[`base-2`,r2],[`base-3`,r3]].forEach(([id, on]) => {
     document.getElementById(id).style.fill = on ? '#f59e0b' : '#2a2d3e';
