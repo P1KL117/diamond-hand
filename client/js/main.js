@@ -229,14 +229,16 @@ function moveRunners(result, oldOuts, oldBases, bInfo, opts = {}) {
     case 'K':
       break; // no change
     case 'groundout': {
-      const scores3 = oldBases[2] && oldOuts < 2;
-      const adv = opts.advance2nd; // 'safe' | 'out' | undefined
-      const new2nd = (adv !== undefined && oldBases[1] && !oldBases[0])
-        ? null                            // runner left 2nd (safe or thrown out)
-        : (oldBases[0] ? r[0] : r[1]);   // normal hold / forced
-      const new3rd = adv === 'safe'
-        ? r[1]                            // runner from 2nd made it
-        : (scores3 ? null : r[2]);        // normal: 3rd scored or stays
+      const adv2  = opts.advance2nd;    // 'safe' | 'out' | undefined
+      const send3 = opts.sendRunner3rd; // 'safe' | 'out' | 'hold' | undefined(auto)
+      // 3rd runner: vacates unless explicitly held
+      const held3rd = send3 === 'hold' || send3 === false;
+      // New 3rd: runner from 2nd if they advanced safely; else old 3rd if held; else null
+      const new3rd = adv2 === 'safe' ? r[1] : (held3rd ? r[2] : null);
+      // New 2nd: null if runner left (advance attempt); else forced from 1st or stays
+      const new2nd = (adv2 !== undefined && oldBases[1] && !oldBases[0])
+        ? null
+        : (oldBases[0] ? r[0] : r[1]);
       state.baseRunners = [null, new2nd, new3rd];
       break;
     }
@@ -285,46 +287,69 @@ function drawAndRefill() {
   drawCards(currentSide(), 3); // HAND_SIZE = 3
 }
 
-// Speed-adjusted groundout advancement probability (runner on 2nd → 3rd)
-const GROUNDOUT_ADV_BASE = 0.55;
+// Speed-adjusted groundout advancement probabilities
+const GROUNDOUT_3RD_BASE = 0.68; // 3rd → home on groundout
+const GROUNDOUT_ADV_BASE = 0.55; // 2nd → 3rd on groundout
+
+function computeGroundout3rdProb(runner) {
+  const sbPct = runner?.sbPct ?? 0.70;
+  return Math.min(0.90, Math.max(0.25, GROUNDOUT_3RD_BASE * (sbPct / 0.70)));
+}
 function computeGroundoutAdvProb(runner) {
   const sbPct = runner?.sbPct ?? 0.70;
   return Math.min(0.85, Math.max(0.20, GROUNDOUT_ADV_BASE * (sbPct / 0.70)));
 }
 
-function showGroundoutAdvModal(runner, prob, onDecide) {
-  const pct = Math.round(prob * 100);
+function showGroundoutRunnerModal({ title, runnerName, pct, holdLabel, sendLabel }, onDecide) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
-
   const showDecision = () => {
     modal.innerHTML = `
       <div class="modal-box modal-choice" style="max-width:360px;text-align:center">
-        <div class="modal-title">⚡ Runner on 2nd</div>
-        <div class="modal-subtitle">${runner?.playerName ?? 'Runner'} — ${pct}% chance to take 3rd</div>
+        <div class="modal-title">${title}</div>
+        <div class="modal-subtitle">${runnerName} — ${pct}% chance</div>
         <div class="modal-actions">
-          <button class="btn-secondary" id="adv-hold">Hold at 2nd</button>
-          <button class="btn-primary" id="adv-send">Send to 3rd 🎲</button>
+          <button class="btn-secondary" id="go-hold">${holdLabel}</button>
+          <button class="btn-primary"   id="go-send">${sendLabel} 🎲</button>
         </div>
       </div>`;
-    modal.querySelector('#adv-hold').addEventListener('click', () => { modal.remove(); onDecide(false); });
-    modal.querySelector('#adv-send').addEventListener('click', () => {
+    modal.querySelector('#go-hold').addEventListener('click', () => { modal.remove(); onDecide('hold'); });
+    modal.querySelector('#go-send').addEventListener('click', () => {
       const roll = Math.random();
-      const success = roll < prob;
+      const success = roll < pct / 100;
       modal.innerHTML = `
         <div class="modal-box modal-choice" style="max-width:360px;text-align:center">
-          <div class="modal-title">${success ? '✓ Safe at 3rd!' : '✗ Thrown out at 3rd!'}</div>
+          <div class="modal-title">${success ? '✓ Safe!' : '✗ Thrown out!'}</div>
           <div class="modal-subtitle">Rolled ${Math.round(roll * 100)} — needed ${pct} or less</div>
           <div class="modal-actions" style="justify-content:center">
-            <button class="btn-primary" id="adv-ok">Continue</button>
+            <button class="btn-primary" id="go-ok">Continue</button>
           </div>
         </div>`;
-      modal.querySelector('#adv-ok').addEventListener('click', () => { modal.remove(); onDecide(success); });
+      modal.querySelector('#go-ok').addEventListener('click', () => { modal.remove(); onDecide(success ? 'safe' : 'out'); });
     });
   };
-
   showDecision();
   document.getElementById('app').appendChild(modal);
+}
+
+function showGroundoutAdvModal(runner, prob, onDecide) {
+  showGroundoutRunnerModal({
+    title: '⚡ Runner on 2nd',
+    runnerName: runner?.playerName ?? 'Runner',
+    pct: Math.round(prob * 100),
+    holdLabel: 'Hold at 2nd',
+    sendLabel: 'Send to 3rd',
+  }, onDecide);
+}
+
+function showGroundout3rdModal(runner, prob, onDecide) {
+  showGroundoutRunnerModal({
+    title: '🏃 Runner on 3rd',
+    runnerName: runner?.playerName ?? 'Runner',
+    pct: Math.round(prob * 100),
+    holdLabel: 'Hold at 3rd',
+    sendLabel: 'Send Home',
+  }, onDecide);
 }
 
 // Speed-adjusted tag-up probability for a runner on base index bi
@@ -459,19 +484,44 @@ document.getElementById('hand-container').addEventListener('click', e => {
     const dpNote = isDP ? ' [DOUBLE PLAY!]' : (dpPossible ? ' [no DP]' : '');
 
     showDPResult(isDP ? true : (dpPossible ? false : null), () => {
-      // After DP resolved: check if runner on 2nd can optionally advance to 3rd
-      // Only possible: not DP, runner on 2nd, 1st empty (not forced), < 2 outs
+      const runner3 = state.baseRunners[2];
       const runner2 = state.baseRunners[1];
-      const canAdv = !isDP && state.bases[1] && !state.bases[0] && state.outs < 2;
-      if (canAdv) {
-        const prob = computeGroundoutAdvProb(runner2);
-        showGroundoutAdvModal(runner2, prob, (success) => {
-          const adv = success ? 'safe' : 'out';
-          const advNote = success ? ' [2nd→3rd ✓]' : ' [2nd→3rd ✗ out]';
-          finishABPlay(card, resolvedResult, { advance2nd: adv }, dpNote + advNote);
-        });
+      const can3rd  = !isDP && state.bases[2] && state.outs < 2;
+
+      // After all runner decisions, call finishABPlay with combined opts
+      const finish = (send3, adv2) => {
+        const notes = [];
+        if (send3 === 'safe')  notes.push('3rd scores');
+        if (send3 === 'out')   notes.push('3rd thrown out at home');
+        if (send3 === 'hold')  notes.push('3rd holds');
+        if (adv2 === 'safe')   notes.push('2nd→3rd ✓');
+        if (adv2 === 'out')    notes.push('2nd→3rd ✗ out');
+        const runnerNote = notes.length ? ` [${notes.join(', ')}]` : '';
+        const opts = {};
+        if (send3 !== undefined) opts.sendRunner3rd = send3;
+        if (adv2  !== undefined) opts.advance2nd    = adv2;
+        finishABPlay(card, resolvedResult, opts, dpNote + runnerNote);
+      };
+
+      // Decision for runner on 2nd (depends on whether 3rd is available after 3rd decision)
+      const decide2nd = (send3) => {
+        const thirdWillVacate = send3 === 'safe' || send3 === 'out';
+        const thirdAvail = !state.bases[2] || thirdWillVacate;
+        const canAdv2 = !isDP && state.bases[1] && !state.bases[0] && state.outs < 2 && thirdAvail;
+        if (canAdv2) {
+          const prob = computeGroundoutAdvProb(runner2);
+          showGroundoutAdvModal(runner2, prob, result => finish(send3, result));
+        } else {
+          finish(send3, undefined);
+        }
+      };
+
+      // Decision for runner on 3rd first, then chain to 2nd
+      if (can3rd) {
+        const prob = computeGroundout3rdProb(runner3);
+        showGroundout3rdModal(runner3, prob, result => decide2nd(result));
       } else {
-        finishABPlay(card, resolvedResult, {}, dpNote);
+        decide2nd(undefined);
       }
     });
     return;

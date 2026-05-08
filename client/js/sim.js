@@ -37,14 +37,10 @@ export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3r
       let runs = 0;
       let extraOuts = 0;
       if (b[2] && o < 2) {
-        if (sendRunner3rd === true) {
-          if (Math.random() < 0.6) { runs++; nb[2] = false; } // 60% scores
-          else nb[2] = false;                                   // thrown out at home
-        } else if (sendRunner3rd === false) {
-          // hold — runner stays on 3rd
-        } else {
-          runs++; nb[2] = false; // default: auto-score
-        }
+        if (sendRunner3rd === 'safe') { runs++; nb[2] = false; }      // pre-rolled safe
+        else if (sendRunner3rd === 'out') { extraOuts++; nb[2] = false; } // pre-rolled out
+        else if (sendRunner3rd === 'hold' || sendRunner3rd === false) { /* hold */ }
+        else { runs++; nb[2] = false; }                               // default auto-score
       }
       if (b[0]) { nb[0] = false; nb[1] = true; } // runner on 1st forced to 2nd
       // Optional advancement from 2nd (only when 1st was empty — not forced)
