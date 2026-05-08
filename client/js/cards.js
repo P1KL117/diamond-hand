@@ -118,13 +118,13 @@ export const SPECIAL_META = {
   rain_delay:        { label: 'RAIN DELAY',          icon: '⛈', category: 'EVENT',   desc: 'Peek next 5 deck cards, reorder freely. Bottom 3 degrade.' },
   replay_review:     { label: 'REPLAY REVIEW',       icon: '◀◀', category: 'MANAGER', desc: 'Pull your last played AB back into your hand.' },
   mound_visit:       { label: 'MOUND VISIT',         icon: '◉',  category: 'MANAGER', desc: 'Peek next 3 deck cards. Take 1, the other 2 go back on top.' },
-  draw_2_discard_1:  { label: 'DRAW 3, KEEP 2',      icon: '⇅',  category: 'MANAGER', desc: 'Draw 3 cards. Keep 2 in hand, discard the third.' },
+  draw_2_discard_1:  { label: 'SCOUTING REPORT',     icon: '⇅',  category: 'MANAGER', desc: 'Draw 3 cards. Keep 2 in hand, discard the third.' },
   recalled:          { label: 'RECALLED',            icon: '↑',  category: 'EVENT',   desc: 'Reveal 6 discard cards. Return 1 to hand.' },
   batting_coach:     { label: 'BATTING COACH',       icon: '↑↑', category: 'MANAGER', desc: 'Upgrade one card a tier. Discard one card as the fee.' },
-  discard_one:       { label: 'EXILE',               icon: '✕',  category: 'MANAGER', desc: 'Permanently remove one card from the game.' },
+  discard_one:       { label: 'EJECTED',             icon: '✕',  category: 'MANAGER', desc: 'Permanently remove one card from the game.' },
   balk:              { label: 'BALK',                icon: '!',  category: 'EVENT',   desc: 'All runners advance one base. No out.' },
   hit_and_run:       { label: 'HIT & RUN',           icon: '↗',  category: 'MANAGER', desc: 'Next groundout/FC resolves as a single instead.' },
-  retain:            { label: 'HOLD ON',             icon: '🛡', category: 'MANAGER', desc: 'The next out this inning doesn\'t count.' },
+  retain:            { label: "MANAGER'S CHALLENGE", icon: '🛡', category: 'MANAGER', desc: 'The next out this inning doesn\'t count.' },
   momentum:          { label: 'MOMENTUM',            icon: '⚡', category: 'EARNED',  desc: 'Advance any runner one base. Earned by grinding.' },
 };
 
