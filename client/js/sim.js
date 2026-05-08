@@ -1,6 +1,6 @@
 // bases = [bool, bool, bool]  →  [1st, 2nd, 3rd]
 
-export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3rd } = {}) {
+export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3rd, advance2nd } = {}) {
   const effective = (hitAndRun && (result === 'groundout' || result === 'FC')) ? 'single' : result;
   const b = [...bases];
   const o = outs;
@@ -35,6 +35,7 @@ export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3r
       // DP is handled externally — caller passes result='DP' if the roll triggered it.
       const nb = [...b];
       let runs = 0;
+      let extraOuts = 0;
       if (b[2] && o < 2) {
         if (sendRunner3rd === true) {
           if (Math.random() < 0.6) { runs++; nb[2] = false; } // 60% scores
@@ -42,11 +43,17 @@ export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3r
         } else if (sendRunner3rd === false) {
           // hold — runner stays on 3rd
         } else {
-          runs++; nb[2] = false; // legacy default: auto-score
+          runs++; nb[2] = false; // default: auto-score
         }
       }
-      if (b[0]) { nb[0] = false; nb[1] = true; } // runner on 1st advances
-      return { bases: nb, outs: o + 1, runs };
+      if (b[0]) { nb[0] = false; nb[1] = true; } // runner on 1st forced to 2nd
+      // Optional advancement from 2nd (only when 1st was empty — not forced)
+      if (advance2nd !== undefined && b[1] && !b[0]) {
+        nb[1] = false; // runner leaves 2nd either way
+        if (advance2nd === 'safe') nb[2] = true;
+        else extraOuts++;                         // thrown out at 3rd
+      }
+      return { bases: nb, outs: o + 1 + extraOuts, runs };
     }
 
     case 'flyout':

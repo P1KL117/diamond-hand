@@ -102,7 +102,7 @@ export function extractCards(feed, side) {
       else if (et === 'passed_ball')
         deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'PB', description: desc || 'Passed ball' });
       else if (et === 'error')
-        poolEventCards.push({ id: `ev-${seq++}`, eventType: 'ERROR', description: desc || 'Error', used: false });
+        deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'ERROR', description: desc || 'Error' });
     }
   }
 

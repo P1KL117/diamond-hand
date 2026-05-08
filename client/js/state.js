@@ -70,8 +70,15 @@ export function drawCards(side, n) {
       if (!s.discard.length) break;
       reshuffleDiscard(side);
     }
-    if (s.deck.length) s.hand.push(s.deck.pop());
-    else break;
+    if (s.deck.length) {
+      const card = s.deck.pop();
+      if (card.type === 'event') {
+        // Event cards go straight to the bonus pool when drawn; loop continues to fill hand
+        s.eventCards.push({ ...card, used: false });
+      } else {
+        s.hand.push(card);
+      }
+    } else break;
   }
 }
 

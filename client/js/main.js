@@ -1,5 +1,5 @@
 import { fetchSchedule, fetchGameFeed, fetchPlayerStats } from './api.js';
-import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL } from './cards.js';
+import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL, upgradeResult } from './cards.js';
 import { processAB, processEvent, hasRunner } from './sim.js';
 import {
   state, resetSides, currentSide,
@@ -208,7 +208,7 @@ function runnerInfo(card) {
   };
 }
 
-function moveRunners(result, oldOuts, oldBases, bInfo) {
+function moveRunners(result, oldOuts, oldBases, bInfo, opts = {}) {
   const r = state.baseRunners; // current runners (about to be replaced)
   switch (result) {
     case 'HR':
@@ -230,7 +230,15 @@ function moveRunners(result, oldOuts, oldBases, bInfo) {
       break; // no change
     case 'groundout': {
       const scores3 = oldBases[2] && oldOuts < 2;
-      state.baseRunners = [null, oldBases[0] ? r[0] : r[1], scores3 ? null : r[2]]; break;
+      const adv = opts.advance2nd; // 'safe' | 'out' | undefined
+      const new2nd = (adv !== undefined && oldBases[1] && !oldBases[0])
+        ? null                            // runner left 2nd (safe or thrown out)
+        : (oldBases[0] ? r[0] : r[1]);   // normal hold / forced
+      const new3rd = adv === 'safe'
+        ? r[1]                            // runner from 2nd made it
+        : (scores3 ? null : r[2]);        // normal: 3rd scored or stays
+      state.baseRunners = [null, new2nd, new3rd];
+      break;
     }
     case 'DP':
       state.baseRunners = [null, r[1], r[2]]; break;
@@ -277,6 +285,48 @@ function drawAndRefill() {
   drawCards(currentSide(), 3); // HAND_SIZE = 3
 }
 
+// Speed-adjusted groundout advancement probability (runner on 2nd → 3rd)
+const GROUNDOUT_ADV_BASE = 0.55;
+function computeGroundoutAdvProb(runner) {
+  const sbPct = runner?.sbPct ?? 0.70;
+  return Math.min(0.85, Math.max(0.20, GROUNDOUT_ADV_BASE * (sbPct / 0.70)));
+}
+
+function showGroundoutAdvModal(runner, prob, onDecide) {
+  const pct = Math.round(prob * 100);
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+
+  const showDecision = () => {
+    modal.innerHTML = `
+      <div class="modal-box modal-choice" style="max-width:360px;text-align:center">
+        <div class="modal-title">⚡ Runner on 2nd</div>
+        <div class="modal-subtitle">${runner?.playerName ?? 'Runner'} — ${pct}% chance to take 3rd</div>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="adv-hold">Hold at 2nd</button>
+          <button class="btn-primary" id="adv-send">Send to 3rd 🎲</button>
+        </div>
+      </div>`;
+    modal.querySelector('#adv-hold').addEventListener('click', () => { modal.remove(); onDecide(false); });
+    modal.querySelector('#adv-send').addEventListener('click', () => {
+      const roll = Math.random();
+      const success = roll < prob;
+      modal.innerHTML = `
+        <div class="modal-box modal-choice" style="max-width:360px;text-align:center">
+          <div class="modal-title">${success ? '✓ Safe at 3rd!' : '✗ Thrown out at 3rd!'}</div>
+          <div class="modal-subtitle">Rolled ${Math.round(roll * 100)} — needed ${pct} or less</div>
+          <div class="modal-actions" style="justify-content:center">
+            <button class="btn-primary" id="adv-ok">Continue</button>
+          </div>
+        </div>`;
+      modal.querySelector('#adv-ok').addEventListener('click', () => { modal.remove(); onDecide(success); });
+    });
+  };
+
+  showDecision();
+  document.getElementById('app').appendChild(modal);
+}
+
 // Speed-adjusted tag-up probability for a runner on base index bi
 const BASE_TAG_PROB = [0.50, 0.65, 0.80]; // 1st→2nd, 2nd→3rd, 3rd→home
 function computeTagProb(bi, runner) {
@@ -315,7 +365,7 @@ function finishABPlay(card, result, opts, note) {
   const oldBases = [...state.bases];
   const oldOuts = state.outs;
   const { bases, outs, runs } = processAB(result, state.bases, state.outs, opts);
-  moveRunners(result, oldOuts, oldBases, runnerInfo(card));
+  moveRunners(result, oldOuts, oldBases, runnerInfo(card), opts);
 
   // Hold On: absorb 1 out if active
   let finalOuts = outs;
@@ -399,18 +449,31 @@ document.getElementById('hand-container').addEventListener('click', e => {
 
   if (hitAndRun && (card.result === 'groundout' || card.result === 'FC')) consumeHitAndRun();
 
-  // Groundout: random DP roll (no player decision)
+  // Groundout: DP roll, then optional runner advancement from 2nd
   if (card.result === 'groundout' && !hitAndRun) {
     const dpPossible = state.bases[0] && state.outs < 2;
     const goAo = state.playerStats[card.playerId]?.goAoRatio ?? 1.0;
     const dpChance = Math.min(0.75, Math.max(0.20, goAo * 0.45));
     const isDP = dpPossible && Math.random() < dpChance;
-    if (isDP) {
-      showDPResult(true, () => finishABPlay(card, 'DP', {}, ' [DOUBLE PLAY!]'));
-    } else {
-      showDPResult(dpPossible ? false : null, () =>
-        finishABPlay(card, 'groundout', {}, dpPossible ? ' [no DP]' : ''));
-    }
+    const resolvedResult = isDP ? 'DP' : 'groundout';
+    const dpNote = isDP ? ' [DOUBLE PLAY!]' : (dpPossible ? ' [no DP]' : '');
+
+    showDPResult(isDP ? true : (dpPossible ? false : null), () => {
+      // After DP resolved: check if runner on 2nd can optionally advance to 3rd
+      // Only possible: not DP, runner on 2nd, 1st empty (not forced), < 2 outs
+      const runner2 = state.baseRunners[1];
+      const canAdv = !isDP && state.bases[1] && !state.bases[0] && state.outs < 2;
+      if (canAdv) {
+        const prob = computeGroundoutAdvProb(runner2);
+        showGroundoutAdvModal(runner2, prob, (success) => {
+          const adv = success ? 'safe' : 'out';
+          const advNote = success ? ' [2nd→3rd ✓]' : ' [2nd→3rd ✗ out]';
+          finishABPlay(card, resolvedResult, { advance2nd: adv }, dpNote + advNote);
+        });
+      } else {
+        finishABPlay(card, resolvedResult, {}, dpNote);
+      }
+    });
     return;
   }
 
@@ -709,6 +772,27 @@ document.getElementById('event-pool').addEventListener('click', e => {
   const btn = e.target.closest('.event-card:not(.disabled)');
   if (!btn || state.phase !== 'playing') return;
   const card = getActiveEventCards().find(c => c.id === btn.dataset.id); if (!card) return;
+
+  // ERROR: upgrade any hand card 1 level
+  if (card.eventType === 'ERROR') {
+    const side = currentSide();
+    const handCards = state[side].hand.filter(c => c.type === 'ab');
+    if (!handCards.length) return;
+    showPickModal({
+      title: '⬆ ERROR — UPGRADE',
+      subtitle: 'Opponent\'s error — upgrade one of your hand cards one level.',
+      cards: handCards, minPick: 1, maxPick: 1, confirmLabel: 'Upgrade',
+    }, (chosen) => {
+      markEventCardUsed(card.id);
+      const target = state[side].hand.find(c => c.id === chosen[0]?.id);
+      if (target) { target.result = upgradeResult(target.result); target.upgraded = true; }
+      addTickerEntry(`⬆ Error — ${target?.playerName ?? '?'} upgraded to ${target?.result ?? '?'}`, 'special-play');
+      renderAll();
+    });
+    return;
+  }
+
+  // SB / WP / PB — advance runners
   markEventCardUsed(card.id);
   const oldBases = [...state.bases];
   const { bases, outs, runs } = processEvent(card.eventType, state.bases, state.outs);

@@ -234,12 +234,16 @@ export function renderEventPool() {
   const cards = getActiveEventCards();
   const el = document.getElementById('event-pool');
   if (!cards.length) { el.innerHTML = '<span class="no-events">—</span>'; return; }
-  const hasRunners = hasRunner(state.bases);
+  const runners = hasRunner(state.bases);
+  const hand = state[currentSide()].hand;
   el.innerHTML = cards.map(c => {
-    const needsRunner = c.eventType === 'SB' || c.eventType === 'CS';
-    const disabled = needsRunner && !hasRunners;
+    const m = EVENT_META[c.eventType] ?? { icon: '?', label: c.eventType, colorClass: '' };
+    const needsRunner = c.eventType === 'SB' || c.eventType === 'WP' || c.eventType === 'PB';
+    const needsHand   = c.eventType === 'ERROR';
+    const disabled = (needsRunner && !runners) || (needsHand && !hand.length);
     return `<button class="event-card ${c.eventType.toLowerCase()} ${disabled ? 'disabled' : ''}"
-      data-id="${c.id}" ${disabled ? 'disabled' : ''} title="${c.description}">${c.eventType}</button>`;
+      data-id="${c.id}" ${disabled ? 'disabled' : ''} title="${c.description}">
+      ${m.icon} ${m.label}</button>`;
   }).join('');
 }
 
@@ -348,9 +352,10 @@ function specialCardHtml(card, discardMode, coachMode, isRetained = false, isUpg
 }
 
 const EVENT_META = {
-  SB:  { icon: '→', label: 'STOLEN BASE',  colorClass: 'ev-blue' },
-  WP:  { icon: '~', label: 'WILD PITCH',   colorClass: 'ev-teal' },
-  PB:  { icon: '~', label: 'PASSED BALL',  colorClass: 'ev-teal' },
+  SB:    { icon: '→', label: 'STOLEN BASE',  colorClass: 'ev-blue' },
+  WP:    { icon: '~', label: 'WILD PITCH',   colorClass: 'ev-teal' },
+  PB:    { icon: '~', label: 'PASSED BALL',  colorClass: 'ev-teal' },
+  ERROR: { icon: '⬆', label: 'ERROR',        colorClass: 'ev-orange' },
 };
 
 function eventCardHtml(card, discardMode, coachMode) {
