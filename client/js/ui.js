@@ -367,6 +367,10 @@ function eventCardHtml(card, discardMode, coachMode) {
 
 // ── Ticker ────────────────────────────────────────────────────────────────────
 
+export function clearTicker() {
+  document.getElementById('ticker-log').innerHTML = '';
+}
+
 export function addTickerEntry(text, type = '') {
   const log = document.getElementById('ticker-log');
   const entry = document.createElement('div');
