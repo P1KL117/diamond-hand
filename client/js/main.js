@@ -184,7 +184,7 @@ function startGame(feed, specials) {
   if (ids.length) fetchPlayerStats(ids).then(s => { state.playerStats = s; });
 
   // Only draw for player-controlled sides — opponent pops from deck directly
-  if (state.gameMode === 'solitaire' || state.playerSide === 'away') drawCards('away', 7);
+  if (state.gameMode === 'solitaire' || state.playerSide === 'away') drawCards('away', 3);
   showScreen('game');
   renderAll();
   addTickerEntry('Play ball!', 'divider');
