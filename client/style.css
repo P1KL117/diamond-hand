@@ -654,8 +654,10 @@ html, body {
 /* ── Tag-up modal ─────────────────────────────────────────────────────────── */
 .tagup-rows { display: flex; flex-direction: column; gap: 10px; }
 .tagup-row { display: flex; align-items: center; gap: 14px; padding: 11px 14px; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
-.tagup-base { font-family: var(--font-display); font-size: .92rem; font-weight: 700; color: var(--text); min-width: 100px; letter-spacing: .03em; }
-.tagup-prob { font-size: .74rem; color: var(--muted2); min-width: 70px; }
+.tagup-base-info { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+.tagup-base { font-family: var(--font-display); font-size: .92rem; font-weight: 700; color: var(--text); letter-spacing: .03em; }
+.tagup-runner { font-size: .70rem; color: var(--muted2); }
+.tagup-prob { font-size: .8rem; font-weight: 600; color: var(--gold); min-width: 70px; }
 .tagup-btns { display: flex; gap: 6px; margin-left: auto; }
 .tagup-btn { background: var(--surface3); border: 1px solid var(--border2); color: var(--muted2); padding: 6px 18px; border-radius: 6px; font-size: .76rem; font-weight: 600; font-family: var(--font-body); cursor: pointer; transition: all .15s; }
 .tagup-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(232,160,32,.1); }

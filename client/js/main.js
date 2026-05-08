@@ -167,6 +167,7 @@ function startGame(feed, specials) {
 
   state.inning = 1; state.isTop = true; state.outs = 0;
   state.bases = [false, false, false];
+  state.baseRunners = [null, null, null];
   state.score = { home: 0, away: 0 };
   state.inningScores = { home: Array(9).fill(null), away: Array(9).fill(null) };
   state.currentInningRuns = 0;
@@ -190,6 +191,89 @@ function startGame(feed, specials) {
   if (state.gameMode === 'single' && state.playerSide === 'home') {
     setTimeout(autoPlayOpponentAB, 900);
   }
+}
+
+// ── Runner tracking ───────────────────────────────────────────────────────────
+// Keeps state.baseRunners in sync with state.bases after each AB.
+// Must be called with the OLD bases/outs (before processAB updates state).
+
+function runnerInfo(card) {
+  return {
+    playerId: card.playerId ?? null,
+    playerName: card.playerName ?? '?',
+    sbPct: state.playerStats[card.playerId]?.sbPct ?? 0.70,
+  };
+}
+
+function moveRunners(result, oldOuts, oldBases, bInfo) {
+  const r = state.baseRunners; // current runners (about to be replaced)
+  switch (result) {
+    case 'HR':
+      state.baseRunners = [null, null, null]; break;
+    case 'triple':
+      state.baseRunners = [null, null, bInfo]; break;
+    case 'double':
+      state.baseRunners = [null, bInfo, oldBases[0] ? r[0] : null]; break;
+    case 'single':
+      state.baseRunners = [bInfo, oldBases[0] ? r[0] : null, oldBases[1] ? r[1] : null]; break;
+    case 'BB': case 'HBP': {
+      if (!oldBases[0])                         state.baseRunners = [bInfo, r[1], r[2]];
+      else if (!oldBases[1])                    state.baseRunners = [bInfo, r[0], r[2]];
+      else if (!oldBases[2])                    state.baseRunners = [bInfo, r[0], r[1]];
+      else /* loaded */                         state.baseRunners = [bInfo, r[0], r[1]]; // r[2] scores
+      break;
+    }
+    case 'K':
+      break; // no change
+    case 'groundout': {
+      const scores3 = oldBases[2] && oldOuts < 2;
+      state.baseRunners = [null, oldBases[0] ? r[0] : r[1], scores3 ? null : r[2]]; break;
+    }
+    case 'DP':
+      state.baseRunners = [null, r[1], r[2]]; break;
+    case 'FC':
+      state.baseRunners = [bInfo, r[1], r[2]]; break;
+    case 'sac_fly':
+      state.baseRunners = [null, null, (oldBases[1] && oldOuts < 2) ? r[1] : null]; break;
+    case 'flyout': case 'lineout':
+      break; // resolved by applyFlyoutTagUp
+    default: break;
+  }
+}
+
+// Shift runners forward one base (WP / PB / BALK) — r[2] scores, others advance
+function shiftRunnersOneBase() {
+  const r = state.baseRunners;
+  state.baseRunners = [null, r[0], r[1]]; // r[2] scored
+}
+
+function applyEventRunnerShift(eventType, oldBases) {
+  const r = state.baseRunners;
+  switch (eventType) {
+    case 'WP': case 'PB': case 'BALK':
+      shiftRunnersOneBase(); break;
+    case 'SB':
+      if (oldBases[1] && !oldBases[2]) state.baseRunners = [r[0], null, r[1]]; // 2nd→3rd
+      else if (oldBases[0])            state.baseRunners = [null, r[0], r[2]]; // 1st→2nd
+      break;
+    case 'CS':
+      if (oldBases[2])      state.baseRunners = [r[0], r[1], null];
+      else if (oldBases[1]) state.baseRunners = [r[0], null, r[2]];
+      else if (oldBases[0]) state.baseRunners = [null, r[1], r[2]];
+      break;
+    case 'ERROR':
+      state.baseRunners = [{ playerId: null, playerName: '?', sbPct: 0.70 }, r[0], r[1]];
+      break;
+    default: break;
+  }
+}
+
+// Speed-adjusted tag-up probability for a runner on base index bi
+const BASE_TAG_PROB = [0.50, 0.65, 0.80]; // 1st→2nd, 2nd→3rd, 3rd→home
+function computeTagProb(bi, runner) {
+  const sbPct = runner?.sbPct ?? 0.70;
+  const speedFactor = sbPct / 0.70;
+  return Math.min(0.93, Math.max(0.15, BASE_TAG_PROB[bi] * speedFactor));
 }
 
 // ── Out meter ─────────────────────────────────────────────────────────────────
@@ -219,7 +303,10 @@ function checkOutMeter(card) {
 // ── AB card play ──────────────────────────────────────────────────────────────
 
 function finishABPlay(card, result, opts, note) {
+  const oldBases = [...state.bases];
+  const oldOuts = state.outs;
   const { bases, outs, runs } = processAB(result, state.bases, state.outs, opts);
+  moveRunners(result, oldOuts, oldBases, runnerInfo(card));
   state.bases = bases; state.outs = outs; addRunsToScore(runs);
   addTickerEntry(`${card.playerName}: ${card.result}${note}${runs > 0 ? `  +${runs}R` : ''}`);
   if (card.description) addTickerEntry(`  "${card.description.slice(0, 80)}"`, 'desc');
@@ -262,7 +349,9 @@ document.getElementById('hand-container').addEventListener('click', e => {
     const card = s.hand.find(c => c.id === cardId); if (!card) return;
     s.hand = s.hand.filter(c => c.id !== cardId);
     s.burned.push(card);
+    const oldBases = [...state.bases];
     const { bases, outs, runs } = processEvent(card.eventType, state.bases, state.outs);
+    applyEventRunnerShift(card.eventType, oldBases);
     state.bases = bases; state.outs = outs; addRunsToScore(runs);
     addTickerEntry(`[${card.eventType}] ${card.description}${runs ? `  +${runs}R` : ''}`);
     if (state.outs >= 3) { endInning(); return; }
@@ -296,7 +385,8 @@ document.getElementById('hand-container').addEventListener('click', e => {
   // Flyout / lineout: tag-up modal for any occupied base
   if ((card.result === 'flyout' || card.result === 'lineout') && state.outs < 2 && hasRunner(state.bases)) {
     const label = `${card.playerName} — ${RESULT_LABEL[card.result] ?? card.result}`;
-    showTagUpModal(state.bases, state.outs, label, decisions => applyFlyoutTagUp(card, decisions));
+    const tagProbs = [0, 1, 2].map(bi => computeTagProb(bi, state.baseRunners[bi]));
+    showTagUpModal(state.bases, state.outs, label, state.baseRunners, tagProbs, decisions => applyFlyoutTagUp(card, decisions, tagProbs));
     return;
   }
 
@@ -483,11 +573,11 @@ function showDPResult(isDP, onContinue) {
 
 // ── Flyout / lineout tag-up resolution ────────────────────────────────────────
 
-const TAG_PROB = [0.50, 0.65, 0.80]; // 1st→2nd, 2nd→3rd, 3rd→home
 const BASE_NAMES = ['1st', '2nd', '3rd'];
 
-function applyFlyoutTagUp(card, decisions) {
+function applyFlyoutTagUp(card, decisions, tagProbs) {
   const nb = [...state.bases];
+  const nr = [...state.baseRunners];
   let extraOuts = 0, runs = 0;
   const notes = [];
 
@@ -495,24 +585,26 @@ function applyFlyoutTagUp(card, decisions) {
     if (!state.bases[bi]) continue;
     if (decisions[bi]) {
       nb[bi] = false;
+      const prob = tagProbs ? tagProbs[bi] : BASE_TAG_PROB[bi];
       if (bi === 2) {
-        if (Math.random() < TAG_PROB[2]) { runs++; notes.push('3rd scores'); }
-        else { extraOuts++; notes.push('3rd thrown out'); }
+        if (Math.random() < prob) { runs++; nr[2] = null; notes.push('3rd scores'); }
+        else { extraOuts++; nr[2] = null; notes.push('3rd thrown out'); }
       } else {
         const targetOccupied = nb[bi + 1]; // check after higher base resolved
         if (targetOccupied) {
           nb[bi] = true; // blocked — auto-hold
           notes.push(`${BASE_NAMES[bi]} holds (base blocked)`);
-        } else if (Math.random() < TAG_PROB[bi]) {
-          nb[bi + 1] = true;
+        } else if (Math.random() < prob) {
+          nb[bi + 1] = true; nr[bi + 1] = nr[bi]; nr[bi] = null;
           notes.push(`${BASE_NAMES[bi]}→${BASE_NAMES[bi + 1]} safe`);
         } else {
-          extraOuts++;
+          extraOuts++; nr[bi] = null;
           notes.push(`${BASE_NAMES[bi]} thrown out`);
         }
       }
     }
   }
+  state.baseRunners = nr;
 
   state.outs += 1 + extraOuts;
   state.bases = nb;
@@ -543,7 +635,9 @@ document.getElementById('event-pool').addEventListener('click', e => {
   if (!btn || state.phase !== 'playing') return;
   const card = getActiveEventCards().find(c => c.id === btn.dataset.id); if (!card) return;
   markEventCardUsed(card.id);
+  const oldBases = [...state.bases];
   const { bases, outs, runs } = processEvent(card.eventType, state.bases, state.outs);
+  applyEventRunnerShift(card.eventType, oldBases);
   state.bases = bases; state.outs = outs; addRunsToScore(runs);
   addTickerEntry(`[${card.eventType}] ${card.description}${runs ? `  +${runs}R` : ''}`);
   if (state.outs >= 3) { endInning(); return; }

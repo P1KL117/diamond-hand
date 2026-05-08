@@ -26,6 +26,7 @@ export const state = {
 
   inning: 1, isTop: true, outs: 0,
   bases: [false, false, false],
+  baseRunners: [null, null, null],   // { playerId, playerName, sbPct } per base
   score: { home: 0, away: 0 },
   inningScores: { home: Array(9).fill(null), away: Array(9).fill(null) },
   currentInningRuns: 0,
@@ -298,6 +299,7 @@ export function endHalfInning() {
   state.currentInningRuns = 0;
   state.outs = 0;
   state.bases = [false, false, false];
+  state.baseRunners = [null, null, null];
   if (state.isTop) { state.isTop = false; drawCards('home', HAND_SIZE); }
   else { state.inning++; state.isTop = true; if (state.inning <= 9) drawCards('away', HAND_SIZE); }
 }

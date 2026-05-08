@@ -472,10 +472,9 @@ export function showChoiceModal({ title, subtitle, options }, onChoose) {
 
 // ── Tag-up modal (flyout / lineout with runners) ──────────────────────────────
 
-const TAG_PROB_PCT = [50, 65, 80]; // 1st→2nd, 2nd→3rd, 3rd→home
 const TAG_BASE_LABELS = ['1st → 2nd', '2nd → 3rd', '3rd → Home'];
 
-export function showTagUpModal(bases, outs, cardLabel, onConfirm) {
+export function showTagUpModal(bases, outs, cardLabel, runners, tagProbs, onConfirm) {
   const occupiedBases = [2, 1, 0].filter(i => bases[i] && outs < 2); // 3rd first
   if (!occupiedBases.length) { onConfirm([]); return; }
 
@@ -489,15 +488,23 @@ export function showTagUpModal(bases, outs, cardLabel, onConfirm) {
         <div class="modal-title">TAG UP?</div>
         <div class="modal-subtitle">${cardLabel}</div>
         <div class="tagup-rows">
-          ${occupiedBases.map(bi => `
+          ${occupiedBases.map(bi => {
+            const runner = runners?.[bi];
+            const pct = tagProbs ? Math.round(tagProbs[bi] * 100) : [50, 65, 80][bi];
+            const runnerLabel = runner?.playerName ? `<span class="tagup-runner">${runner.playerName}</span>` : '';
+            return `
             <div class="tagup-row">
-              <div class="tagup-base">${TAG_BASE_LABELS[bi]}</div>
-              <div class="tagup-prob">${TAG_PROB_PCT[bi]}% safe</div>
+              <div class="tagup-base-info">
+                <div class="tagup-base">${TAG_BASE_LABELS[bi]}</div>
+                ${runnerLabel}
+              </div>
+              <div class="tagup-prob">${pct}% safe</div>
               <div class="tagup-btns">
                 <button class="tagup-btn${decisions[bi] ? ' active' : ''}" data-base="${bi}" data-val="1">Tag</button>
                 <button class="tagup-btn${!decisions[bi] ? ' active hold' : ''}" data-base="${bi}" data-val="0">Hold</button>
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>
         <div class="modal-actions">
           <button id="tagup-confirm" class="btn-primary">Play Ball</button>
