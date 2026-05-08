@@ -497,11 +497,12 @@ document.getElementById('hand-container').addEventListener('click', e => {
     const dpPossible = state.bases[0] && state.outs < 2;
     const goAo = state.playerStats[card.playerId]?.goAoRatio ?? 1.0;
     const dpChance = Math.min(0.75, Math.max(0.20, goAo * 0.45));
-    const isDP = dpPossible && Math.random() < dpChance;
+    const dpRoll = dpPossible ? Math.random() : null;
+    const isDP = dpPossible && dpRoll < dpChance;
     const resolvedResult = isDP ? 'DP' : 'groundout';
     const dpNote = isDP ? ' [DOUBLE PLAY!]' : (dpPossible ? ' [no DP]' : '');
 
-    showDPResult(isDP ? true : (dpPossible ? false : null), () => {
+    showDPResult(dpPossible, isDP, dpRoll, dpChance, () => {
       const runner3 = state.baseRunners[2];
       const runner2 = state.baseRunners[1];
       const can3rd  = !isDP && state.bases[2] && state.outs < 2;
@@ -760,14 +761,19 @@ function autoPlayOpponentAB() {
 
 // ── DP roll result modal ──────────────────────────────────────────────────────
 
-function showDPResult(isDP, onContinue) {
-  if (isDP === null) { onContinue(); return; } // no DP possible, skip modal
+function showDPResult(dpPossible, isDP, roll, dpChance, onContinue) {
+  if (!dpPossible) { onContinue(); return; } // no runner on 1st — skip modal entirely
+  const rollPct  = Math.round(roll * 100);
+  const needPct  = Math.round(dpChance * 100);
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `
-    <div class="modal-box modal-choice" style="max-width:340px;text-align:center">
+    <div class="modal-box modal-choice" style="max-width:360px;text-align:center">
       <div class="modal-title">${isDP ? '⚡ DOUBLE PLAY!' : '🎲 No Double Play'}</div>
-      <div class="modal-subtitle">${isDP ? 'Runner on 1st doubled off.' : 'Batter only, runner advances.'}</div>
+      <div class="modal-subtitle" style="font-size:.8rem;margin-bottom:.25rem">
+        Rolled <strong>${rollPct}</strong> — needed ≤<strong>${needPct}</strong> for DP
+      </div>
+      <div class="modal-subtitle">${isDP ? 'Runner on 1st doubled off.' : 'Batter only — runner on 1st advances.'}</div>
       <div class="modal-actions" style="justify-content:center">
         <button class="btn-primary" id="dp-ok">Continue</button>
       </div>

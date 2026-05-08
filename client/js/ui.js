@@ -237,11 +237,17 @@ export function renderDiamond() {
   [[`runner-1`, r1, runners[0]], [`runner-2`, r2, runners[1]], [`runner-3`, r3, runners[2]]].forEach(([id, on, runner]) => {
     const el = document.getElementById(id);
     el.style.opacity = on ? '1' : '0';
+    // SVG circles require a child <title> element for browser hover tooltips
+    let svgTitle = el.querySelector('title');
     if (on && runner?.playerName) {
       const spd = Math.round((runner.sbPct ?? 0.70) * 100);
-      el.setAttribute('title', `${runner.playerName}  |  Speed ${spd}%`);
-    } else {
-      el.removeAttribute('title');
+      if (!svgTitle) {
+        svgTitle = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        el.appendChild(svgTitle);
+      }
+      svgTitle.textContent = `${runner.playerName}  ·  Speed ${spd}%`;
+    } else if (svgTitle) {
+      svgTitle.remove();
     }
   });
   [[`base-1`,r1],[`base-2`,r2],[`base-3`,r3]].forEach(([id, on]) => {
