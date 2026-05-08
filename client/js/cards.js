@@ -77,6 +77,14 @@ export function extractCards(feed, side) {
         result = (ev.includes('ground') || ev.includes('bunt') || ev.includes('force'))
           ? 'groundout' : 'flyout';
       }
+      // Batter reaches on fielding error — skip as an AB card but add ERROR bonus card
+      if (play.result.eventType === 'field_error') {
+        deckEventCards.push({
+          id: `ev-${seq++}`, type: 'event', eventType: 'ERROR',
+          description: play.result?.description ?? 'Reached on fielding error',
+        });
+        continue;
+      }
       if (!result) continue;
       const id = play.matchup?.batter?.id;
       const name = play.matchup?.batter?.fullName ?? 'Unknown';
@@ -90,19 +98,54 @@ export function extractCards(feed, side) {
       });
     }
 
-    for (const ev of play.playEvents ?? []) {
-      if (ev.type !== 'action') continue;
-      const et = (ev.details?.eventType ?? '').toLowerCase();
-      const desc = ev.details?.description ?? '';
-      if (!ourHalf) continue;
-      if (SB_ET.has(et))
-        deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'SB', description: desc || 'Stolen base' });
-      else if (et === 'wild_pitch')
-        deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'WP', description: desc || 'Wild pitch' });
-      else if (et === 'passed_ball')
-        deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'PB', description: desc || 'Passed ball' });
-      else if (et === 'error')
-        deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'ERROR', description: desc || 'Error' });
+    // Capture SB/WP/PB/ERROR during our batting half from play events and runner movements
+    if (ourHalf) {
+      // Track runner IDs that already generated an ERROR card to avoid double-counting
+      // when the same error appears in both playEvents and runners arrays
+      const erroredRunnerIds = new Set();
+
+      for (const ev of play.playEvents ?? []) {
+        if (ev.type !== 'action') continue;
+        const et = (ev.details?.eventType ?? '').toLowerCase();
+        const desc = ev.details?.description ?? '';
+        if (SB_ET.has(et))
+          deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'SB', description: desc || 'Stolen base' });
+        else if (et === 'wild_pitch')
+          deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'WP', description: desc || 'Wild pitch' });
+        else if (et === 'passed_ball')
+          deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'PB', description: desc || 'Passed ball' });
+        // et === 'error' fallback: only add if no runner-sourced errors found yet
+        // (runner array below is more specific; we'll re-check after)
+      }
+
+      // Runner advancement errors — most reliable source for fielding errors
+      // (throw errors, bobbles that let runners advance or score)
+      const runnerErrors = (play.runners ?? []).filter(r =>
+        (r.details?.event ?? '').toLowerCase().includes('error')
+      );
+      for (const r of runnerErrors) {
+        const rid = String(r.details?.runner?.id ?? r.movement?.start ?? seq);
+        if (!erroredRunnerIds.has(rid)) {
+          erroredRunnerIds.add(rid);
+          deckEventCards.push({
+            id: `ev-${seq++}`, type: 'event', eventType: 'ERROR',
+            description: r.details?.event ?? 'Fielding error',
+          });
+        }
+      }
+
+      // Fallback: play event 'error' action with no runner-level match found
+      if (erroredRunnerIds.size === 0) {
+        for (const ev of play.playEvents ?? []) {
+          if (ev.type !== 'action') continue;
+          if ((ev.details?.eventType ?? '').toLowerCase() === 'error') {
+            deckEventCards.push({
+              id: `ev-${seq++}`, type: 'event', eventType: 'ERROR',
+              description: ev.details?.description ?? 'Fielding error',
+            });
+          }
+        }
+      }
     }
   }
 
