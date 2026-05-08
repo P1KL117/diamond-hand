@@ -82,42 +82,69 @@ export function renderTeamSelect(game) {
 
 // ── Config screen ─────────────────────────────────────────────────────────────
 
-export function renderConfigScreen(game, side, seededSpecials) {
+export function renderConfigScreen(game, side, seededSpecials, deckSummary = null) {
   const sideTeam = side === 'away' ? game.awayTeam.name : game.homeTeam.name;
   document.getElementById('config-matchup').textContent =
     `${game.awayTeam.abbreviation} @ ${game.homeTeam.abbreviation}  ·  Playing as ${sideTeam}`;
-  renderConfigMode('game', seededSpecials, {});
+  renderConfigMode('game', seededSpecials, {}, 5, {}, deckSummary);
 }
 
-export function renderConfigMode(mode, seededSpecials, customCounts, randomCount = 5, customEventCounts = {}) {
+export function renderConfigMode(mode, seededSpecials, customCounts, randomCount = 5, customEventCounts = {}, deckSummary = null) {
   const contentEl = document.getElementById('config-content');
   document.querySelectorAll('.mode-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.mode === mode));
 
   if (mode === 'game') {
-    const groups = {};
-    for (const c of seededSpecials) {
-      groups[c.specialType] = (groups[c.specialType] || 0) + 1;
-    }
-    const total = seededSpecials.length;
-    if (!total) {
-      contentEl.innerHTML = `<div class="config-empty">No special cards were detected in this game's data.<br>Switch to Custom to add some manually.</div>`;
-    } else {
-      contentEl.innerHTML = `
-        <div class="seeded-grid">
-          ${ALL_SPECIAL_TYPES.map(type => {
-            const n = groups[type] || 0;
-            if (!n) return '';
-            const m = SPECIAL_META[type];
-            return `<div class="seeded-card" data-tip="${m.desc}">
-              <span class="seeded-icon">${m.icon}</span>
-              <span class="seeded-label">${m.label}</span>
-              <span class="seeded-count">×${n}</span>
-            </div>`;
-          }).filter(Boolean).join('')}
-        </div>
-        <div class="config-total">${total} special card${total !== 1 ? 's' : ''} will be shuffled into your deck</div>`;
-    }
+    const { byResult = {}, byEvent = {}, abTotal = 0 } = deckSummary ?? {};
+
+    const HIT_ORDER   = ['HR','triple','double','single','BB','HBP'];
+    const OUT_ORDER   = ['K','groundout','flyout','lineout','DP','sac_fly','FC'];
+    const EVENT_LOCAL = { SB:'→ Stolen Base', WP:'~ Wild Pitch', PB:'~ Passed Ball', ERROR:'⬆ Error' };
+
+    const badge = (cls, text) => `<span class="deck-badge ${cls}">${text}</span>`;
+
+    const hitBadges = HIT_ORDER.filter(r => byResult[r])
+      .map(r => badge('green', `${RESULT_LABEL[r]} ×${byResult[r]}`)).join('');
+    const outBadges = OUT_ORDER.filter(r => byResult[r])
+      .map(r => badge('red', `${RESULT_LABEL[r]} ×${byResult[r]}`)).join('');
+    const evtBadges = Object.entries(byEvent).filter(([,n]) => n)
+      .map(([t, n]) => badge('blue', `${EVENT_LOCAL[t] ?? t} ×${n}`)).join('');
+
+    const spGroups = {};
+    for (const c of seededSpecials) spGroups[c.specialType] = (spGroups[c.specialType] || 0) + 1;
+    const spBadges = ALL_SPECIAL_TYPES.filter(t => spGroups[t])
+      .map(t => {
+        const m = SPECIAL_META[t];
+        return `<div class="seeded-card" data-tip="${m.desc}">
+          <span class="seeded-icon">${m.icon}</span>
+          <span class="seeded-label">${m.label}</span>
+          <span class="seeded-count">×${spGroups[t]}</span>
+        </div>`;
+      }).join('');
+
+    const hitTotal = HIT_ORDER.reduce((s, r) => s + (byResult[r] || 0), 0);
+    const outTotal = OUT_ORDER.reduce((s, r) => s + (byResult[r] || 0), 0);
+    const evtTotal = Object.values(byEvent).reduce((a, b) => a + b, 0);
+    const grandTotal = abTotal + evtTotal + seededSpecials.length;
+
+    contentEl.innerHTML = `
+      <div class="deck-section">
+        <div class="deck-section-hd">Hits — ${hitTotal}</div>
+        <div class="deck-badges">${hitBadges || '<span style="color:var(--muted2);font-size:.72rem">none</span>'}</div>
+      </div>
+      <div class="deck-section">
+        <div class="deck-section-hd">Outs — ${outTotal}</div>
+        <div class="deck-badges">${outBadges || '<span style="color:var(--muted2);font-size:.72rem">none</span>'}</div>
+      </div>
+      ${evtTotal ? `<div class="deck-section">
+        <div class="deck-section-hd">Bonus Events — ${evtTotal}</div>
+        <div class="deck-badges">${evtBadges}</div>
+      </div>` : ''}
+      ${spBadges ? `<div class="deck-section">
+        <div class="deck-section-hd">Special Cards — ${seededSpecials.length}</div>
+        <div class="seeded-grid">${spBadges}</div>
+      </div>` : `<div class="config-empty" style="padding:8px 0">No special cards detected — switch to Custom to add some.</div>`}
+      <div class="config-total">${grandTotal} total cards will be shuffled into your deck</div>`;
   } else if (mode === 'custom') {
     const evInfo = {
       SB:    { icon: '→', label: 'Stolen Base', desc: 'Advances a runner one base when played from pool.' },

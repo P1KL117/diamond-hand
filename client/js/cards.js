@@ -222,6 +222,15 @@ export const ALL_SPECIAL_TYPES = Object.keys(SPECIAL_META).filter(t => t !== 'mo
 export const EVENT_CARD_TYPES = ['SB', 'WP', 'PB', 'ERROR'];
 const EVENT_DESCS = { SB: 'Stolen base', WP: 'Wild pitch', PB: 'Passed ball', ERROR: 'Error' };
 
+// Summarise what's in the deck for the config screen display
+export function summarizeCards(abCards, deckEventCards) {
+  const byResult = {};
+  for (const c of abCards) byResult[c.result] = (byResult[c.result] || 0) + 1;
+  const byEvent = {};
+  for (const c of deckEventCards) byEvent[c.eventType] = (byEvent[c.eventType] || 0) + 1;
+  return { byResult, byEvent, abTotal: abCards.length };
+}
+
 export function buildEventCardsFromCounts(counts) {
   let seq = 70000;
   const cards = [];

@@ -234,6 +234,20 @@ html, body {
 .seeded-label { font-size: .76rem; font-weight: 600; color: #ddd6fe; letter-spacing: .03em; }
 .seeded-count { font-size: .76rem; color: var(--muted2); }
 
+/* Deck breakdown (game mode summary) */
+.deck-section { margin-bottom: .55rem; }
+.deck-section-hd { font-size: .62rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted2); margin-bottom: .3rem; }
+.deck-badges { display: flex; flex-wrap: wrap; gap: .25rem; }
+.deck-badge { padding: .15rem .45rem; border-radius: 4px; font-size: .7rem; font-weight: 600; white-space: nowrap; }
+.deck-badge.green  { background: rgba(52,211,153,.13);  color: #34d399; border: 1px solid rgba(52,211,153,.25); }
+.deck-badge.red    { background: rgba(248,113,113,.13); color: #f87171; border: 1px solid rgba(248,113,113,.25); }
+.deck-badge.yellow { background: rgba(251,191,36,.13);  color: #fbbf24; border: 1px solid rgba(251,191,36,.25); }
+.deck-badge.blue   { background: rgba(96,165,250,.13);  color: #60a5fa; border: 1px solid rgba(96,165,250,.25); }
+.deck-badge.purple { background: rgba(167,139,250,.13); color: #a78bfa; border: 1px solid rgba(167,139,250,.25); }
+
+/* Custom-mode section headers */
+.slider-section-label { font-size: .62rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted2); padding: .4rem 0 .2rem; border-top: 1px solid rgba(255,255,255,.06); }
+
 /* Tooltip */
 [data-tip] { position: relative; }
 [data-tip]::after {

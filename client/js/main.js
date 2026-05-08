@@ -1,5 +1,5 @@
 import { fetchSchedule, fetchGameFeed, fetchPlayerStats } from './api.js';
-import { extractCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, buildEventCardsFromCounts, EVENT_CARD_TYPES, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL, upgradeResult } from './cards.js';
+import { extractCards, summarizeCards, computeSeededSpecials, buildSpecialsFromCounts, buildRandomSpecials, buildEventCardsFromCounts, EVENT_CARD_TYPES, shuffle, ALL_SPECIAL_TYPES, SPECIAL_META, RESULT_LABEL, upgradeResult } from './cards.js';
 import { processAB, processEvent, hasRunner } from './sim.js';
 import {
   state, resetSides, currentSide,
@@ -36,6 +36,7 @@ let customCounts = Object.fromEntries(ALL_SPECIAL_TYPES.map(t => [t, 0]));
 let customEventCounts = Object.fromEntries(EVENT_CARD_TYPES.map(t => [t, 0]));
 let randomCount = 5;
 let pendingFeed = null;
+let pendingDeckSummary = null;
 
 // ── Picker ────────────────────────────────────────────────────────────────────
 
@@ -97,8 +98,10 @@ document.getElementById('team-options').addEventListener('click', async e => {
     seededSpecials = computeSeededSpecials(feed, state.playerSide);
     customCounts = Object.fromEntries(ALL_SPECIAL_TYPES.map(t => [t, 0]));
     customEventCounts = Object.fromEntries(EVENT_CARD_TYPES.map(t => [t, 0]));
+    const { abCards: _ab, deckEventCards: _ev } = extractCards(feed, state.playerSide);
+    pendingDeckSummary = summarizeCards(_ab, _ev);
     configMode = 'game';
-    renderConfigScreen(state.selectedGame, state.playerSide, seededSpecials);
+    renderConfigScreen(state.selectedGame, state.playerSide, seededSpecials, pendingDeckSummary);
     showScreen('config');
   } catch (e) {
     alert(`Failed to load game: ${e.message}`);
@@ -112,7 +115,7 @@ document.getElementById('team-options').addEventListener('click', async e => {
 document.getElementById('config-tabs').addEventListener('click', e => {
   const tab = e.target.closest('.mode-tab'); if (!tab) return;
   configMode = tab.dataset.mode;
-  renderConfigMode(configMode, seededSpecials, customCounts, randomCount, customEventCounts);
+  renderConfigMode(configMode, seededSpecials, customCounts, randomCount, customEventCounts, pendingDeckSummary);
 });
 
 document.getElementById('config-content').addEventListener('input', e => {
