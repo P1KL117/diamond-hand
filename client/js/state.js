@@ -245,15 +245,20 @@ export function draw3ForChoice(side) {
   return drawn;
 }
 
-export function commitPitchingChange(specialCardId, chosenCard, replaceCardId, others) {
+export function commitPitchingChange(specialCardId, chosenCards, replaceCardId, others) {
   const side = currentSide();
   const s = state[side];
   burnSpecialCard(specialCardId);
   if (replaceCardId) {
     const ri = s.hand.findIndex(c => c.id === replaceCardId);
-    if (ri !== -1) { const [replaced] = s.hand.splice(ri, 1); s.discard.push(replaced); }
+    if (ri !== -1) {
+      const [replaced] = s.hand.splice(ri, 1);
+      // Shuffle swapped card into a random deck position
+      const pos = Math.floor(Math.random() * (s.deck.length + 1));
+      s.deck.splice(pos, 0, replaced);
+    }
   }
-  if (chosenCard) s.hand.push(chosenCard);
+  if (chosenCards?.length) s.hand.push(...chosenCards);
   s.discard.push(...others);
 }
 

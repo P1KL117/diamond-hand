@@ -440,26 +440,27 @@ function handleSpecialCard(cardId) {
     case 'pitching_change': {
       const drawn = draw3ForChoice(currentSide());
       if (!drawn.length) { addTickerEntry('⇄ Pitching Change — deck empty', 'special-play'); drawAndRefill(); renderAll(); break; }
+      const keepN = Math.min(2, drawn.length);
       showPickModal({
         title: '⇄ PITCHING CHANGE',
-        subtitle: 'Pick 1 card from the top of the deck to bring in.',
-        cards: drawn, minPick: 1, maxPick: 1, confirmLabel: 'Take This Card',
+        subtitle: keepN < 2 ? 'Pick the card to bring in.' : 'Pick 2 cards from the top of the deck to bring in.',
+        cards: drawn, minPick: keepN, maxPick: keepN, confirmLabel: keepN < 2 ? 'Take This Card' : 'Keep These 2',
       }, (chosen) => {
-        const others = drawn.filter(c => c.id !== chosen[0]?.id);
+        const others = drawn.filter(c => !chosen.find(k => k.id === c.id));
         const side = currentSide();
         const handCards = state[side].hand.filter(c => c.id !== cardId && c.type !== 'special');
         if (!handCards.length) {
-          commitPitchingChange(cardId, chosen[0] ?? null, null, others);
-          addTickerEntry('⇄ Pitching Change — card added to hand', 'special-play');
+          commitPitchingChange(cardId, chosen, null, others);
+          addTickerEntry('⇄ Pitching Change — cards added to hand', 'special-play');
           drawAndRefill(); renderAll(); return;
         }
         showPickModal({
           title: '⇄ PITCHING CHANGE',
-          subtitle: 'Select a hand card to swap out.',
+          subtitle: 'Select a hand card to shuffle back into the deck.',
           cards: handCards, minPick: 1, maxPick: 1, confirmLabel: 'Swap Out',
         }, (swapOut) => {
-          commitPitchingChange(cardId, chosen[0] ?? null, swapOut[0]?.id ?? null, others);
-          addTickerEntry('⇄ Pitching Change — hand card swapped for deck pick', 'special-play');
+          commitPitchingChange(cardId, chosen, swapOut[0]?.id ?? null, others);
+          addTickerEntry('⇄ Pitching Change — kept 2 deck picks, hand card shuffled back in', 'special-play');
           drawAndRefill(); renderAll();
         });
       });

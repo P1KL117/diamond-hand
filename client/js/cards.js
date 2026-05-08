@@ -101,8 +101,6 @@ export function extractCards(feed, side) {
         deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'WP', description: desc || 'Wild pitch' });
       else if (et === 'passed_ball')
         deckEventCards.push({ id: `ev-${seq++}`, type: 'event', eventType: 'PB', description: desc || 'Passed ball' });
-      else if (CS_ET.has(et))
-        poolEventCards.push({ id: `ev-${seq++}`, eventType: 'CS', description: desc || 'Caught stealing', used: false });
       else if (et === 'error')
         poolEventCards.push({ id: `ev-${seq++}`, eventType: 'ERROR', description: desc || 'Error', used: false });
     }
@@ -114,7 +112,7 @@ export function extractCards(feed, side) {
 // ── Special cards ─────────────────────────────────────────────────────────────
 
 export const SPECIAL_META = {
-  pitching_change:   { label: 'PITCHING CHANGE',    icon: '⇄',  category: 'MANAGER', desc: 'Swap one hand card for your pick of 3 from the top of the deck.' },
+  pitching_change:   { label: 'PITCHING CHANGE',    icon: '⇄',  category: 'MANAGER', desc: 'Draw 3 cards, keep 2. Swap out a hand card — it shuffles back into the deck.' },
   rain_delay:        { label: 'RAIN DELAY',          icon: '⛈', category: 'EVENT',   desc: 'Peek next 5 deck cards, reorder freely. Bottom 3 degrade.' },
   replay_review:     { label: 'REPLAY REVIEW',       icon: '◀◀', category: 'MANAGER', desc: 'Pull your last played AB back into your hand.' },
   mound_visit:       { label: 'MOUND VISIT',         icon: '◉',  category: 'MANAGER', desc: 'Peek next 3 deck cards. Take 1, the other 2 go back on top.' },
