@@ -7,7 +7,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MLB = 'https://statsapi.mlb.com';
 
-app.use(express.static(join(__dirname, '../client')));
+app.use(express.static(join(__dirname, '../client'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
+}));
 
 app.get('/api/schedule', async (req, res) => {
   try {
