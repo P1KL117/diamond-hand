@@ -4,7 +4,7 @@ import { processAB, processEvent, hasRunner } from './sim.js';
 import {
   state, resetSides, currentSide,
   drawCards, playABCard, canRedraw, doRedraw,
-  playSpecialCard, peekAndRemoveDeck, commitMoundVisit, commitRainDelay,
+  playSpecialCard, peekAndRemoveDeck, commitPitchingChange, commitMoundVisit, commitRainDelay,
   draw3ForChoice, commitDraw3, getDiscardSample, commitRecalled,
   commitBattingCoach, commitExileOne,
   markEventCardUsed, getActiveEventCards, consumeHitAndRun,
@@ -273,24 +273,8 @@ function applyEventRunnerShift(eventType, oldBases) {
 
 // ── Draw-one refill (called after every AB/special play) ─────────────────────
 
-const OUT_RESULTS = new Set(['K', 'groundout', 'flyout', 'lineout', 'DP', 'FC']);
-
 function drawAndRefill() {
-  const side = currentSide();
-  const before = state[side].hand.length;
-  drawCards(side, 3); // HAND_SIZE = 3
-  const s = state[side];
-  // Pitching change: if newly drawn card is an out, skip it automatically
-  if (s.skipNextOut && s.hand.length > before) {
-    const newCard = s.hand[s.hand.length - 1];
-    if (newCard?.type === 'ab' && OUT_RESULTS.has(newCard.result)) {
-      s.hand.pop();
-      s.discard.push(newCard);
-      s.skipNextOut = false;
-      addTickerEntry(`⇄ ${newCard.playerName} — out skipped (pitching change)`, 'special-play');
-      drawCards(side, 3);
-    }
-  }
+  drawCards(currentSide(), 3); // HAND_SIZE = 3
 }
 
 // Speed-adjusted tag-up probability for a runner on base index bi
@@ -452,6 +436,35 @@ function handleSpecialCard(cardId) {
       drawAndRefill();
       renderAll();
       break;
+
+    case 'pitching_change': {
+      const drawn = draw3ForChoice(currentSide());
+      if (!drawn.length) { addTickerEntry('⇄ Pitching Change — deck empty', 'special-play'); drawAndRefill(); renderAll(); break; }
+      showPickModal({
+        title: '⇄ PITCHING CHANGE',
+        subtitle: 'Pick 1 card from the top of the deck to bring in.',
+        cards: drawn, minPick: 1, maxPick: 1, confirmLabel: 'Take This Card',
+      }, (chosen) => {
+        const others = drawn.filter(c => c.id !== chosen[0]?.id);
+        const side = currentSide();
+        const handCards = state[side].hand.filter(c => c.id !== cardId && c.type !== 'special');
+        if (!handCards.length) {
+          commitPitchingChange(cardId, chosen[0] ?? null, null, others);
+          addTickerEntry('⇄ Pitching Change — card added to hand', 'special-play');
+          drawAndRefill(); renderAll(); return;
+        }
+        showPickModal({
+          title: '⇄ PITCHING CHANGE',
+          subtitle: 'Select a hand card to swap out.',
+          cards: handCards, minPick: 1, maxPick: 1, confirmLabel: 'Swap Out',
+        }, (swapOut) => {
+          commitPitchingChange(cardId, chosen[0] ?? null, swapOut[0]?.id ?? null, others);
+          addTickerEntry('⇄ Pitching Change — hand card swapped for deck pick', 'special-play');
+          drawAndRefill(); renderAll();
+        });
+      });
+      break;
+    }
 
     case 'balk': {
       const oldBases = [...state.bases];

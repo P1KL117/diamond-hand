@@ -114,7 +114,7 @@ export function extractCards(feed, side) {
 // ── Special cards ─────────────────────────────────────────────────────────────
 
 export const SPECIAL_META = {
-  pitching_change:   { label: 'PITCHING CHANGE',    icon: '⇄',  category: 'MANAGER', desc: 'The next out card you draw is skipped to discard.' },
+  pitching_change:   { label: 'PITCHING CHANGE',    icon: '⇄',  category: 'MANAGER', desc: 'Swap one hand card for your pick of 3 from the top of the deck.' },
   rain_delay:        { label: 'RAIN DELAY',          icon: '⛈', category: 'EVENT',   desc: 'Peek next 5 deck cards, reorder freely. Bottom 3 degrade.' },
   replay_review:     { label: 'REPLAY REVIEW',       icon: '◀◀', category: 'MANAGER', desc: 'Pull your last played AB back into your hand.' },
   mound_visit:       { label: 'MOUND VISIT',         icon: '◉',  category: 'MANAGER', desc: 'Peek next 3 deck cards. Take 1, the other 2 go back on top.' },

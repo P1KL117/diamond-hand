@@ -11,7 +11,6 @@ function makeSide() {
     lastPlayedABCard: null,
     consecutiveOuts: 0,
     pendingRetain: null,
-    skipNextOut: false,   // pitching change: skip next out drawn
     freeOutActive: false, // hold on: next out doesn't count
   };
 }
@@ -143,11 +142,8 @@ export function playSpecialCard(cardId) {
   if (!card || card.type !== 'special') return null;
 
   switch (card.specialType) {
-    case 'pitching_change': {
-      burnSpecialCard(cardId);
-      s.skipNextOut = true;
-      return { kind: 'immediate', msg: '⇄ Pitching change — next out you draw is skipped' };
-    }
+    case 'pitching_change':
+      return { kind: 'pitching_change', cardId };
 
     case 'rain_delay':
       return { kind: 'rain_delay', cardId };
@@ -249,6 +245,18 @@ export function draw3ForChoice(side) {
   return drawn;
 }
 
+export function commitPitchingChange(specialCardId, chosenCard, replaceCardId, others) {
+  const side = currentSide();
+  const s = state[side];
+  burnSpecialCard(specialCardId);
+  if (replaceCardId) {
+    const ri = s.hand.findIndex(c => c.id === replaceCardId);
+    if (ri !== -1) { const [replaced] = s.hand.splice(ri, 1); s.discard.push(replaced); }
+  }
+  if (chosenCard) s.hand.push(chosenCard);
+  s.discard.push(...others);
+}
+
 export function commitDraw3(cardId, keepCards, discardCard) {
   const side = currentSide();
   const s = state[side];
@@ -315,7 +323,6 @@ export function commitRetain(specialCardId, targetCardId) {
 
 export function endHalfInning() {
   const side = currentSide();
-  state[side].skipNextOut = false;
   state[side].freeOutActive = false;
   dumpHandToDiscard();
   state.inningScores[side][state.inning - 1] = state.currentInningRuns;
