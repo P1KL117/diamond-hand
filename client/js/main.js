@@ -4,9 +4,9 @@ import { processAB, processEvent, hasRunner } from './sim.js';
 import {
   state, resetSides, currentSide,
   drawCards, playABCard, canRedraw, doRedraw,
-  playSpecialCard, peekAndRemoveDeck, commitMoundVisit,
-  draw2ForChoice, commitDraw2, getDiscardSample, commitRecalled,
-  commitBattingCoach, commitDiscardOne, commitRetain,
+  playSpecialCard, peekAndRemoveDeck, commitMoundVisit, commitRainDelay,
+  draw3ForChoice, commitDraw3, getDiscardSample, commitRecalled,
+  commitBattingCoach, commitExileOne,
   markEventCardUsed, getActiveEventCards, consumeHitAndRun,
   endHalfInning, isGameOver, addRunsToScore, realGameScore,
 } from './state.js';
@@ -14,6 +14,7 @@ import {
   showScreen, renderDateDisplay, renderGameList, renderTeamSelect,
   renderConfigScreen, renderConfigMode, updateCustomTotal,
   renderAll, addTickerEntry, renderEndScreen, showPickModal, showChoiceModal, showTagUpModal,
+  showRainDelayModal,
 } from './ui.js';
 
 // ── Date ──────────────────────────────────────────────────────────────────────
@@ -269,6 +270,28 @@ function applyEventRunnerShift(eventType, oldBases) {
   }
 }
 
+// ── Draw-one refill (called after every AB/special play) ─────────────────────
+
+const OUT_RESULTS = new Set(['K', 'groundout', 'flyout', 'lineout', 'DP', 'FC']);
+
+function drawAndRefill() {
+  const side = currentSide();
+  const before = state[side].hand.length;
+  drawCards(side, 3); // HAND_SIZE = 3
+  const s = state[side];
+  // Pitching change: if newly drawn card is an out, skip it automatically
+  if (s.skipNextOut && s.hand.length > before) {
+    const newCard = s.hand[s.hand.length - 1];
+    if (newCard?.type === 'ab' && OUT_RESULTS.has(newCard.result)) {
+      s.hand.pop();
+      s.discard.push(newCard);
+      s.skipNextOut = false;
+      addTickerEntry(`⇄ ${newCard.playerName} — out skipped (pitching change)`, 'special-play');
+      drawCards(side, 3);
+    }
+  }
+}
+
 // Speed-adjusted tag-up probability for a runner on base index bi
 const BASE_TAG_PROB = [0.50, 0.65, 0.80]; // 1st→2nd, 2nd→3rd, 3rd→home
 function computeTagProb(bi, runner) {
@@ -279,13 +302,13 @@ function computeTagProb(bi, runner) {
 
 // ── Out meter ─────────────────────────────────────────────────────────────────
 
-const OUT_RESULTS = new Set(['K', 'groundout', 'flyout', 'lineout', 'DP', 'FC', 'sac_fly']);
+const OUT_RESULTS_METER = new Set(['K', 'groundout', 'flyout', 'lineout', 'DP', 'FC', 'sac_fly']);
 
 function checkOutMeter(card) {
   if (card.type !== 'ab') return;
   const side = currentSide();
   const s = state[side];
-  if (OUT_RESULTS.has(card.result)) {
+  if (OUT_RESULTS_METER.has(card.result)) {
     s.consecutiveOuts++;
     if (s.consecutiveOuts >= 5) {
       s.consecutiveOuts = 0;
@@ -308,10 +331,20 @@ function finishABPlay(card, result, opts, note) {
   const oldOuts = state.outs;
   const { bases, outs, runs } = processAB(result, state.bases, state.outs, opts);
   moveRunners(result, oldOuts, oldBases, runnerInfo(card));
-  state.bases = bases; state.outs = outs; addRunsToScore(runs);
+
+  // Hold On: absorb 1 out if active
+  let finalOuts = outs;
+  if (state[currentSide()].freeOutActive && outs > oldOuts) {
+    finalOuts = outs - 1;
+    state[currentSide()].freeOutActive = false;
+    note += ' [out nullified]';
+  }
+
+  state.bases = bases; state.outs = finalOuts; addRunsToScore(runs);
   addTickerEntry(`${card.playerName}: ${card.result}${note}${runs > 0 ? `  +${runs}R` : ''}`);
   if (card.description) addTickerEntry(`  "${card.description.slice(0, 80)}"`, 'desc');
   checkOutMeter(card);
+  drawAndRefill();
   if (state.outs >= 3) { endInning(); return; }
   renderAll();
 }
@@ -321,22 +354,35 @@ document.getElementById('hand-container').addEventListener('click', e => {
   const btn = e.target.closest('[data-id]'); if (!btn) return;
   const cardId = btn.dataset.id;
 
-  // Retain selection
-  if (state.retainMode) {
-    const specialId = document.getElementById('hand-container').dataset.pendingSpecial;
-    if (specialId) { commitRetain(specialId, cardId); addTickerEntry('📌 Card retained — survives next hand dump.', 'special-play'); renderAll(); }
-    return;
-  }
-  // Discard One selection
+  // Exile One selection
   if (state.discardOneMode) {
     const specialId = document.getElementById('hand-container').dataset.pendingSpecial;
-    if (specialId) { commitDiscardOne(specialId, cardId); addTickerEntry('✕ Card discarded — drew 1 replacement.'); renderAll(); }
+    if (specialId) {
+      commitExileOne(specialId, cardId);
+      addTickerEntry('✕ Card permanently exiled.');
+      drawAndRefill();
+      renderAll();
+    }
     return;
   }
-  // Batting Coach selection
+  // Batting Coach — two-step: pick upgrade target, then pick discard fee
   if (state.battingCoachMode) {
-    const specialId = document.getElementById('hand-container').dataset.pendingSpecial;
-    if (specialId) { commitBattingCoach(specialId, cardId); addTickerEntry('↑↑ Card upgraded one tier.', 'special-play'); renderAll(); }
+    if (!state.battingCoachTarget) {
+      // Step 1: select the card to upgrade
+      state.battingCoachTarget = cardId;
+      addTickerEntry('↑↑ Upgrade target set — now select a card to discard as the fee.', 'special-play');
+      renderAll();
+    } else {
+      // Step 2: select cost card (can't be same card)
+      if (cardId === state.battingCoachTarget) return;
+      const specialId = document.getElementById('hand-container').dataset.pendingSpecial;
+      if (specialId) {
+        commitBattingCoach(specialId, state.battingCoachTarget, cardId);
+        addTickerEntry('↑↑ Card upgraded — fee paid.', 'special-play');
+        drawAndRefill();
+        renderAll();
+      }
+    }
     return;
   }
 
@@ -402,45 +448,63 @@ function handleSpecialCard(cardId) {
   switch (result.kind) {
     case 'immediate':
       addTickerEntry(result.msg, 'special-play');
+      drawAndRefill();
       renderAll();
       break;
 
     case 'balk': {
+      const oldBases = [...state.bases];
       const { bases, outs, runs } = processEvent('BALK', state.bases, state.outs);
+      applyEventRunnerShift('BALK', oldBases);
       state.bases = bases; state.outs = outs; addRunsToScore(runs);
       addTickerEntry(`! BALK — runners advance${runs ? `  +${runs}R` : ''}`, 'special-play');
+      drawAndRefill();
       if (state.outs >= 3) { endInning(); return; }
       renderAll();
       break;
     }
 
-    case 'mound_visit': {
+    case 'rain_delay': {
       const top5 = peekAndRemoveDeck(currentSide(), 5);
-      showPickModal({
-        title: '◉ MOUND VISIT',
-        subtitle: 'Select any cards to take into your hand. The rest go to discard.',
-        cards: top5, minPick: 0, maxPick: top5.length, confirmLabel: 'Take Selected',
-      }, (taken) => {
-        const returned = top5.filter(c => !taken.find(t => t.id === c.id));
-        commitMoundVisit(cardId, taken, returned);
-        addTickerEntry(`◉ Mound visit — took ${taken.length} card${taken.length !== 1 ? 's' : ''} from deck top`, 'special-play');
+      if (!top5.length) { addTickerEntry('⛈ Rain delay — deck empty', 'special-play'); drawAndRefill(); renderAll(); break; }
+      showRainDelayModal(top5, (ordered) => {
+        commitRainDelay(cardId, ordered);
+        addTickerEntry('⛈ Rain delay — cards reordered, bottom 3 degraded', 'special-play');
+        drawAndRefill();
         renderAll();
       });
       break;
     }
 
-    case 'draw_2_discard_1': {
-      const drawn = draw2ForChoice(currentSide());
-      if (!drawn.length) { addTickerEntry('Draw 2 — deck empty', 'special-play'); renderAll(); break; }
+    case 'mound_visit': {
+      const top3 = peekAndRemoveDeck(currentSide(), 3);
+      if (!top3.length) { addTickerEntry('◉ Mound visit — deck empty', 'special-play'); drawAndRefill(); renderAll(); break; }
       showPickModal({
-        title: '⇅ DRAW 2, DISCARD 1',
-        subtitle: 'Choose 1 card to keep in your hand. The other goes to discard.',
-        cards: drawn, minPick: 1, maxPick: 1, confirmLabel: 'Keep This Card',
+        title: '◉ MOUND VISIT',
+        subtitle: 'Take 1 card into your hand. The other 2 go back on top of the deck.',
+        cards: top3, minPick: 1, maxPick: 1, confirmLabel: 'Take This Card',
+      }, (taken) => {
+        const returned = top3.filter(c => c.id !== taken[0]?.id);
+        commitMoundVisit(cardId, taken[0] ?? null, returned);
+        addTickerEntry(`◉ Mound visit — took 1 card, 2 returned to deck top`, 'special-play');
+        drawAndRefill();
+        renderAll();
+      });
+      break;
+    }
+
+    case 'draw_3_keep_2': {
+      const drawn = draw3ForChoice(currentSide());
+      if (!drawn.length) { addTickerEntry('⇅ Draw 3 — deck empty', 'special-play'); drawAndRefill(); renderAll(); break; }
+      const keepN = Math.min(2, drawn.length);
+      showPickModal({
+        title: '⇅ DRAW 3, KEEP 2',
+        subtitle: keepN < 2 ? 'Keep the card. The rest go to discard.' : 'Choose 2 cards to keep. The third goes to discard.',
+        cards: drawn, minPick: keepN, maxPick: keepN, confirmLabel: `Keep ${keepN === 2 ? 'These 2' : 'This 1'}`,
       }, (kept) => {
-        const keep = kept[0] ?? null;
-        const discard = drawn.find(c => c.id !== keep?.id) ?? null;
-        commitDraw2(cardId, keep, discard);
-        addTickerEntry(`⇅ Drew 2 — kept 1, discarded 1`, 'special-play');
+        const discard = drawn.find(c => !kept.find(k => k.id === c.id)) ?? null;
+        commitDraw3(cardId, kept, discard);
+        addTickerEntry(`⇅ Drew 3 — kept ${kept.length}, discarded ${discard ? 1 : 0}`, 'special-play');
         renderAll();
       });
       break;
@@ -448,7 +512,7 @@ function handleSpecialCard(cardId) {
 
     case 'recalled': {
       const sample = getDiscardSample(currentSide(), 6);
-      if (!sample.length) { addTickerEntry('Recalled — discard is empty', 'special-play'); renderAll(); break; }
+      if (!sample.length) { addTickerEntry('↑ Recalled — discard is empty', 'special-play'); drawAndRefill(); renderAll(); break; }
       showPickModal({
         title: '↑ RECALLED FROM MINORS',
         subtitle: 'Choose 1 card to return to your hand from the discard pile.',
@@ -456,6 +520,7 @@ function handleSpecialCard(cardId) {
       }, (chosen) => {
         commitRecalled(cardId, chosen[0]);
         addTickerEntry(`↑ Recalled — 1 card returned from discard`, 'special-play');
+        drawAndRefill();
         renderAll();
       });
       break;
@@ -463,21 +528,14 @@ function handleSpecialCard(cardId) {
 
     case 'batting_coach': {
       document.getElementById('hand-container').dataset.pendingSpecial = cardId;
-      addTickerEntry('↑↑ Batting Coach — select a hand card to upgrade', 'special-play');
+      addTickerEntry('↑↑ Batting Coach — select a card to upgrade, then a card to discard as the fee', 'special-play');
       renderAll();
       break;
     }
 
-    case 'discard_one': {
+    case 'exile_one': {
       document.getElementById('hand-container').dataset.pendingSpecial = cardId;
-      addTickerEntry('✕ Discard One — select a card from your hand to remove', 'special-play');
-      renderAll();
-      break;
-    }
-
-    case 'retain': {
-      document.getElementById('hand-container').dataset.pendingSpecial = cardId;
-      addTickerEntry('📌 Hold On — select a card to keep after this half-inning', 'special-play');
+      addTickerEntry('✕ Exile — select a card to permanently remove from the game', 'special-play');
       renderAll();
       break;
     }

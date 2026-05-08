@@ -666,7 +666,22 @@ html, body {
 /* ── Specials-only note ───────────────────────────────────────────────────── */
 .specials-only-note { width: 100%; color: var(--gold); font-size: .72rem; padding: 4px 2px 6px; opacity: .7; }
 
-/* ── Upgrade badge ────────────────────────────────────────────────────────── */
+/* ── Upgrading badge (batting coach step 2) ──────────────────────────────── */
+.upgrading-badge { font-size: .6rem; font-weight: 700; color: #a78bfa; background: rgba(124,58,237,.18); border: 1px solid #7c3aed; border-radius: 4px; padding: 2px 5px; margin-bottom: 4px; letter-spacing: .05em; }
+.is-upgrading { opacity: .65; border-color: #7c3aed !important; }
+
+/* ── Rain delay modal ─────────────────────────────────────────────────────── */
+.rain-list { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.rain-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--surface2); border-radius: 7px; border: 1px solid var(--border); }
+.rain-row-degrade { border-color: #ef4444; background: rgba(239,68,68,.07); }
+.rain-pos { font-family: var(--font-display); font-size: .9rem; font-weight: 900; color: var(--muted2); min-width: 18px; }
+.rain-card-label { flex: 1; font-size: .78rem; font-weight: 600; }
+.rain-fate { font-size: .68rem; font-weight: 700; letter-spacing: .04em; min-width: 82px; text-align: right; color: var(--muted2); }
+.rain-row-degrade .rain-fate { color: #ef4444; }
+.rain-arrows { display: flex; gap: 4px; }
+.rain-up, .rain-dn { background: var(--surface3); border: 1px solid var(--border2); color: var(--muted2); padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: .76rem; }
+.rain-up:hover:not(:disabled), .rain-dn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.rain-up:disabled, .rain-dn:disabled { opacity: .3; cursor: default; }
 
 /* ── Misc ─────────────────────────────────────────────────────────────────── */
 .loading-overlay { position: fixed; inset: 0; background: rgba(7,9,14,.88); display: flex; align-items: center; justify-content: center; font-size: .95rem; color: var(--muted2); z-index: 100; letter-spacing: .06em; backdrop-filter: blur(2px); }

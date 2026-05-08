@@ -1,6 +1,6 @@
 import { degradeResult, upgradeResult, shuffle } from './cards.js';
 
-const HAND_SIZE = 7;
+const HAND_SIZE = 3;
 
 function makeSide() {
   return {
@@ -11,6 +11,8 @@ function makeSide() {
     lastPlayedABCard: null,
     consecutiveOuts: 0,
     pendingRetain: null,
+    skipNextOut: false,   // pitching change: skip next out drawn
+    freeOutActive: false, // hold on: next out doesn't count
   };
 }
 
@@ -34,6 +36,7 @@ export const state = {
   // UI interaction modes
   discardOneMode: false,
   battingCoachMode: false,
+  battingCoachTarget: null,  // cardId selected in step 1 of batting coach
   retainMode: false,
 
   playLog: [],
@@ -142,18 +145,12 @@ export function playSpecialCard(cardId) {
   switch (card.specialType) {
     case 'pitching_change': {
       burnSpecialCard(cardId);
-      dumpHandToDiscard();
-      drawCards(side, HAND_SIZE);
-      return { kind: 'immediate', msg: '⇄ Pitching change — new hand drawn' };
+      s.skipNextOut = true;
+      return { kind: 'immediate', msg: '⇄ Pitching change — next out you draw is skipped' };
     }
 
-    case 'rain_delay': {
-      burnSpecialCard(cardId);
-      dumpHandToDiscard();
-      s.discard = s.discard.map(c => ({ ...c, result: degradeResult(c.result), degraded: c.degraded + 1 }));
-      drawCards(side, HAND_SIZE);
-      return { kind: 'immediate', msg: '⛈ Rain delay — discard degraded, new hand drawn' };
-    }
+    case 'rain_delay':
+      return { kind: 'rain_delay', cardId };
 
     case 'replay_review': {
       burnSpecialCard(cardId);
@@ -165,26 +162,27 @@ export function playSpecialCard(cardId) {
         s.lastPlayedABCard = null;
         if (s.batterIndex > 0) s.batterIndex--;
       }
-      drawCards(side, s.hand.length + 1);
-      return { kind: 'immediate', msg: '◀◀ Replay review — last AB reversed' };
+      drawCards(side, HAND_SIZE);
+      return { kind: 'immediate', msg: '◀◀ Replay review — last AB returned to hand' };
     }
 
     case 'mound_visit':
       return { kind: 'mound_visit', cardId };
 
     case 'draw_2_discard_1':
-      return { kind: 'draw_2_discard_1', cardId };
+      return { kind: 'draw_3_keep_2', cardId };
 
     case 'recalled':
       return { kind: 'recalled', cardId };
 
     case 'batting_coach':
       state.battingCoachMode = true;
+      state.battingCoachTarget = null;
       return { kind: 'batting_coach', cardId };
 
     case 'discard_one':
       state.discardOneMode = true;
-      return { kind: 'discard_one', cardId };
+      return { kind: 'exile_one', cardId };
 
     case 'balk': {
       burnSpecialCard(cardId);
@@ -197,43 +195,65 @@ export function playSpecialCard(cardId) {
       return { kind: 'immediate', msg: '↗ Hit & Run active — next groundout/FC plays as single' };
     }
 
+    case 'retain': {
+      burnSpecialCard(cardId);
+      s.freeOutActive = true;
+      return { kind: 'immediate', msg: '🛡 Hold On — the next out this inning is nullified' };
+    }
+
     default:
       burnSpecialCard(cardId);
       return { kind: 'immediate', msg: 'Special card played' };
   }
 }
 
-// ── Mound visit: reveal top 5, player picks which to take ────────────────────
+// ── Mound visit: peek 3, take 1, put 2 back on top of deck ───────────────────
 
 export function peekAndRemoveDeck(side, n) {
   const s = state[side];
   const taken = [];
   for (let i = 0; i < n && s.deck.length; i++) taken.push(s.deck.pop());
-  return taken; // temporarily removed; commitMoundVisit will resolve them
+  return taken;
 }
 
-export function commitMoundVisit(cardId, taken, returned) {
+export function commitMoundVisit(cardId, takenCard, returnedCards) {
   const side = currentSide();
   const s = state[side];
-  s.hand.push(...taken);
-  s.discard.push(...returned);
+  if (takenCard) s.hand.push(takenCard);
+  // Push returned in reverse so original order is preserved (first peeked = top of deck)
+  if (returnedCards.length) s.deck.push(...[...returnedCards].reverse());
   burnSpecialCard(cardId);
 }
 
-// ── Draw 2 Discard 1 ──────────────────────────────────────────────────────────
+// ── Rain delay: peek 5, reorder, bottom 3 degrade ────────────────────────────
 
-export function draw2ForChoice(side) {
+export function commitRainDelay(cardId, reorderedCards) {
+  const side = currentSide();
+  const s = state[side];
+  const processed = reorderedCards.map((c, i) =>
+    (i >= 2 && c.type === 'ab')
+      ? { ...c, result: degradeResult(c.result), degraded: (c.degraded || 0) + 1 }
+      : c
+  );
+  // Push reversed so index-0 ends up on top (last popped)
+  s.deck.push(...[...processed].reverse());
+  burnSpecialCard(cardId);
+}
+
+// ── Draw 3 Keep 2 ─────────────────────────────────────────────────────────────
+
+export function draw3ForChoice(side) {
   const s = state[side];
   const drawn = [];
-  for (let i = 0; i < 2 && s.deck.length; i++) drawn.push(s.deck.pop());
+  for (let i = 0; i < 3 && s.deck.length; i++) drawn.push(s.deck.pop());
   return drawn;
 }
 
-export function commitDraw2(cardId, keep, discard) {
+export function commitDraw3(cardId, keepCards, discardCard) {
   const side = currentSide();
   const s = state[side];
-  if (keep) s.hand.push(keep);
-  if (discard) s.discard.push(discard);
+  s.hand.push(...keepCards);
+  if (discardCard) s.discard.push(discardCard);
   burnSpecialCard(cardId);
 }
 
@@ -251,35 +271,36 @@ export function commitRecalled(cardId, chosen) {
   if (idx !== -1) { s.discard.splice(idx, 1); s.hand.push(chosen); }
 }
 
-// ── Batting coach: upgrade a hand card one tier ───────────────────────────────
+// ── Batting coach: upgrade one card, discard one as fee ──────────────────────
 
-export function commitBattingCoach(specialCardId, targetCardId) {
+export function commitBattingCoach(specialCardId, upgradeTargetId, costCardId) {
   const side = currentSide();
   const s = state[side];
   state.battingCoachMode = false;
+  state.battingCoachTarget = null;
   burnSpecialCard(specialCardId);
-  const card = s.hand.find(c => c.id === targetCardId);
-  if (card) { card.result = upgradeResult(card.result); card.upgraded = true; }
+  const target = s.hand.find(c => c.id === upgradeTargetId);
+  if (target) { target.result = upgradeResult(target.result); target.upgraded = true; }
+  const costIdx = s.hand.findIndex(c => c.id === costCardId);
+  if (costIdx !== -1) { const [cost] = s.hand.splice(costIdx, 1); s.discard.push(cost); }
 }
 
-// ── Discard one ───────────────────────────────────────────────────────────────
+// ── Exile one (permanent removal) ────────────────────────────────────────────
 
-export function commitDiscardOne(specialCardId, targetCardId) {
+export function commitExileOne(specialCardId, targetCardId) {
   const side = currentSide();
   const s = state[side];
-  if (s.pendingRetain?.id === targetCardId) return; // retained card is protected
   state.discardOneMode = false;
   burnSpecialCard(specialCardId);
   const ti = s.hand.findIndex(c => c.id === targetCardId);
-  if (ti !== -1) { const [card] = s.hand.splice(ti, 1); s.discard.push(card); }
-  drawCards(side, s.hand.length + 1);
+  if (ti !== -1) { const [card] = s.hand.splice(ti, 1); s.burned.push(card); } // burned, not discard
 }
 
 // ── Hit & run ─────────────────────────────────────────────────────────────────
 
 export function consumeHitAndRun() { state[currentSide()].hitAndRunActive = false; }
 
-// ── Retain ────────────────────────────────────────────────────────────────────
+// ── (Retain legacy — kept for pendingRetain card persistence) ─────────────────
 
 export function commitRetain(specialCardId, targetCardId) {
   const side = currentSide();
@@ -293,8 +314,10 @@ export function commitRetain(specialCardId, targetCardId) {
 // ── Inning / game management ─────────────────────────────────────────────────
 
 export function endHalfInning() {
-  dumpHandToDiscard();
   const side = currentSide();
+  state[side].skipNextOut = false;
+  state[side].freeOutActive = false;
+  dumpHandToDiscard();
   state.inningScores[side][state.inning - 1] = state.currentInningRuns;
   state.currentInningRuns = 0;
   state.outs = 0;

@@ -269,19 +269,18 @@ export function renderHand() {
   }
   const hand = state[side].hand;
   const discardMode = state.discardOneMode;
-  const coachMode = state.battingCoachMode;
-  const retainMode = state.retainMode;
-  const retained = state[side].pendingRetain;
+  const coachMode   = state.battingCoachMode;
+  const coachTarget = state.battingCoachTarget; // null = step 1, cardId = step 2
+  const retained    = state[side].pendingRetain;
   const el = document.getElementById('hand-container');
 
   el.classList.toggle('discard-one-mode', discardMode);
   el.classList.toggle('batting-coach-mode', coachMode);
-  el.classList.toggle('retain-mode', retainMode);
 
-  const modeMsg = discardMode ? 'Select a card to discard'
-    : coachMode ? 'Select a card to upgrade'
-    : retainMode ? 'Select a card to keep after this half-inning'
-    : null;
+  let modeMsg = null;
+  if (discardMode) modeMsg = 'Select a card to permanently exile from the game';
+  else if (coachMode && !coachTarget) modeMsg = 'Select a card to upgrade';
+  else if (coachMode && coachTarget)  modeMsg = 'Now select a card to discard as the coaching fee';
 
   if (modeMsg) {
     document.getElementById('hand-mode-banner').textContent = modeMsg;
@@ -292,7 +291,7 @@ export function renderHand() {
 
   if (!hand.length) {
     el.innerHTML = canRedraw()
-      ? '<div class="hand-empty-msg">Hand empty — draw a new hand</div>'
+      ? '<div class="hand-empty-msg">Hand empty — draw new cards</div>'
       : '<div class="no-cards">No cards</div>';
     return;
   }
@@ -301,14 +300,15 @@ export function renderHand() {
     ? '<div class="specials-only-note">No AB cards — discard these and redraw</div>'
     : '';
   el.innerHTML = specialsNote + hand.map(card => {
-    const isRetained = retained && card.id === retained.id;
-    if (card.type === 'special') return specialCardHtml(card, discardMode, coachMode, isRetained);
+    const isRetained  = !!(retained && card.id === retained.id);
+    const isUpgrading = !!(coachTarget && card.id === coachTarget);
+    if (card.type === 'special') return specialCardHtml(card, discardMode, coachMode, isRetained, isUpgrading);
     if (card.type === 'event')   return eventCardHtml(card, discardMode, coachMode);
-    return abCardHtml(card, discardMode, coachMode, isRetained);
+    return abCardHtml(card, discardMode, coachMode, isRetained, isUpgrading);
   }).join('');
 }
 
-function abCardHtml(card, discardMode, coachMode, isRetained = false) {
+function abCardHtml(card, discardMode, coachMode, isRetained = false, isUpgrading = false) {
   const color     = RESULT_COLOR[card.result] ?? 'yellow';
   const label     = RESULT_LABEL[card.result] ?? card.result;
   const origLabel = (card.degraded > 0 && card.originalResult !== card.result)
@@ -316,11 +316,15 @@ function abCardHtml(card, discardMode, coachMode, isRetained = false) {
   const degradeBadge = card.degraded > 0 ? `<div class="degrade-badge">↓${card.degraded}</div>` : '';
   const upgradeBadge = card.upgraded ? `<div class="upgrade-badge">⬆</div>` : '';
   const wornClass = card.degraded >= 2 ? 'worn-heavy' : card.degraded === 1 ? 'worn-light' : '';
-  const actionClass = discardMode && isRetained ? 'unplayable' : (discardMode || coachMode) ? 'target-select' : 'playable';
   const retainedMark = isRetained ? '<div class="retained-pin">📌</div>' : '';
+  const upgradingBadge = isUpgrading ? '<div class="upgrading-badge">↑↑ UPGRADING</div>' : '';
 
-  return `<button class="ab-card color-${color} ${actionClass} ${wornClass}${isRetained ? ' is-retained' : ''}" data-id="${card.id}" data-type="ab" ${discardMode && isRetained ? 'disabled' : ''}>
-    ${retainedMark}
+  // In coach cost step (coachMode + isUpgrading card exists), upgrading card is locked; others are cost targets
+  const actionClass = isUpgrading ? 'unplayable'
+    : (discardMode || coachMode) ? 'target-select' : 'playable';
+
+  return `<button class="ab-card color-${color} ${actionClass} ${wornClass}${isRetained ? ' is-retained' : ''}${isUpgrading ? ' is-upgrading' : ''}" data-id="${card.id}" data-type="ab" ${isUpgrading ? 'disabled' : ''}>
+    ${retainedMark}${upgradingBadge}
     <div class="card-player">${card.playerName}</div>
     <div class="card-result">${label}</div>
     ${origLabel}${degradeBadge}${upgradeBadge}
@@ -328,12 +332,14 @@ function abCardHtml(card, discardMode, coachMode, isRetained = false) {
   </button>`;
 }
 
-function specialCardHtml(card, discardMode, coachMode, isRetained = false) {
+function specialCardHtml(card, discardMode, coachMode, isRetained = false, isUpgrading = false) {
   const meta = SPECIAL_META[card.specialType] ?? { label: card.specialType, icon: '★', category: 'SPECIAL', desc: '' };
-  const actionClass = discardMode && isRetained ? 'unplayable' : (discardMode || coachMode) ? 'target-select' : 'playable';
   const retainedMark = isRetained ? '<div class="retained-pin">📌</div>' : '';
-  return `<button class="special-card ${actionClass}${isRetained ? ' is-retained' : ''}" data-id="${card.id}" data-type="special" ${discardMode && isRetained ? 'disabled' : ''}>
-    ${retainedMark}
+  const upgradingBadge = isUpgrading ? '<div class="upgrading-badge">↑↑ UPGRADING</div>' : '';
+  const actionClass = isUpgrading ? 'unplayable'
+    : (discardMode || coachMode) ? 'target-select' : 'playable';
+  return `<button class="special-card ${actionClass}${isRetained ? ' is-retained' : ''}${isUpgrading ? ' is-upgrading' : ''}" data-id="${card.id}" data-type="special" ${isUpgrading ? 'disabled' : ''}>
+    ${retainedMark}${upgradingBadge}
     <div class="special-category">${meta.category}</div>
     <div class="special-icon">${meta.icon}</div>
     <div class="special-label">${meta.label}</div>
@@ -467,6 +473,63 @@ export function showChoiceModal({ title, subtitle, options }, onChoose) {
       onChoose(options[parseInt(btn.dataset.idx)].value);
     });
   });
+  document.getElementById('app').appendChild(modal);
+}
+
+// ── Rain delay: reorder 5 deck cards, bottom 3 degrade ───────────────────────
+
+export function showRainDelayModal(cards, onConfirm) {
+  let order = [...cards];
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+
+  const cardLabel = c => {
+    if (c.type === 'special') return (SPECIAL_META[c.specialType]?.label ?? c.specialType);
+    if (c.type === 'event')   return c.eventType;
+    return `${c.playerName} — ${RESULT_LABEL[c.result] ?? c.result}`;
+  };
+  const cardColorClass = c => c.type === 'ab' ? `color-${RESULT_COLOR[c.result] ?? 'yellow'}` : '';
+
+  const render = () => {
+    modal.innerHTML = `
+      <div class="modal-box">
+        <div class="modal-title">⛈ RAIN DELAY</div>
+        <div class="modal-subtitle">Reorder these cards. The bottom 3 will degrade one tier when locked in.</div>
+        <div class="rain-list">
+          ${order.map((c, i) => `
+            <div class="rain-row${i >= 2 ? ' rain-row-degrade' : ''}">
+              <div class="rain-pos">${i + 1}</div>
+              <div class="rain-card-label ${cardColorClass(c)}">${cardLabel(c)}</div>
+              <div class="rain-fate">${i >= 2 ? '⬇ DEGRADES' : '✓ SAFE'}</div>
+              <div class="rain-arrows">
+                <button class="rain-up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+                <button class="rain-dn" data-i="${i}" ${i === order.length - 1 ? 'disabled' : ''}>↓</button>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div class="modal-actions">
+          <button id="rain-confirm" class="btn-primary">Lock It In</button>
+        </div>
+      </div>`;
+
+    modal.querySelectorAll('.rain-up').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.i);
+        if (i > 0) { [order[i - 1], order[i]] = [order[i], order[i - 1]]; render(); }
+      });
+    });
+    modal.querySelectorAll('.rain-dn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.i);
+        if (i < order.length - 1) { [order[i], order[i + 1]] = [order[i + 1], order[i]]; render(); }
+      });
+    });
+    modal.querySelector('#rain-confirm').addEventListener('click', () => {
+      modal.remove(); onConfirm(order);
+    });
+  };
+
+  render();
   document.getElementById('app').appendChild(modal);
 }
 

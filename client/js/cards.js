@@ -114,17 +114,17 @@ export function extractCards(feed, side) {
 // ── Special cards ─────────────────────────────────────────────────────────────
 
 export const SPECIAL_META = {
-  pitching_change:   { label: 'PITCHING CHANGE',    icon: '⇄',  category: 'MANAGER', desc: 'Discard hand, draw 7 fresh.' },
-  rain_delay:        { label: 'RAIN DELAY',          icon: '⛈', category: 'EVENT',   desc: 'Discard hand, draw 7. Discard pile degrades now.' },
-  replay_review:     { label: 'REPLAY REVIEW',       icon: '◀◀', category: 'MANAGER', desc: 'Return last AB to hand. Draw 1 replacement.' },
-  mound_visit:       { label: 'MOUND VISIT',         icon: '◉',  category: 'MANAGER', desc: 'Reveal top 5 deck cards. Take any you want.' },
-  draw_2_discard_1:  { label: 'DRAW 2, DISCARD 1',   icon: '⇅',  category: 'MANAGER', desc: 'Draw 2 cards. Keep 1 in hand, discard the other.' },
-  recalled:          { label: 'RECALLED FROM MINORS',icon: '↑',  category: 'EVENT',   desc: 'Reveal 6 discard cards. Return 1 to hand.' },
-  batting_coach:     { label: 'BATTING COACH',       icon: '↑↑', category: 'MANAGER', desc: 'Upgrade one hand card one tier.' },
-  discard_one:       { label: 'DISCARD ONE',         icon: '✕',  category: 'MANAGER', desc: 'Remove 1 hand card. Draw 1 replacement.' },
+  pitching_change:   { label: 'PITCHING CHANGE',    icon: '⇄',  category: 'MANAGER', desc: 'The next out card you draw is skipped to discard.' },
+  rain_delay:        { label: 'RAIN DELAY',          icon: '⛈', category: 'EVENT',   desc: 'Peek next 5 deck cards, reorder freely. Bottom 3 degrade.' },
+  replay_review:     { label: 'REPLAY REVIEW',       icon: '◀◀', category: 'MANAGER', desc: 'Pull your last played AB back into your hand.' },
+  mound_visit:       { label: 'MOUND VISIT',         icon: '◉',  category: 'MANAGER', desc: 'Peek next 3 deck cards. Take 1, the other 2 go back on top.' },
+  draw_2_discard_1:  { label: 'DRAW 3, KEEP 2',      icon: '⇅',  category: 'MANAGER', desc: 'Draw 3 cards. Keep 2 in hand, discard the third.' },
+  recalled:          { label: 'RECALLED',            icon: '↑',  category: 'EVENT',   desc: 'Reveal 6 discard cards. Return 1 to hand.' },
+  batting_coach:     { label: 'BATTING COACH',       icon: '↑↑', category: 'MANAGER', desc: 'Upgrade one card a tier. Discard one card as the fee.' },
+  discard_one:       { label: 'EXILE',               icon: '✕',  category: 'MANAGER', desc: 'Permanently remove one card from the game.' },
   balk:              { label: 'BALK',                icon: '!',  category: 'EVENT',   desc: 'All runners advance one base. No out.' },
-  hit_and_run:       { label: 'HIT & RUN',           icon: '↗',  category: 'MANAGER', desc: 'Next groundout/FC resolves as a single.' },
-  retain:            { label: 'HOLD ON',             icon: '📌', category: 'MANAGER', desc: 'Mark one card to survive the next hand dump.' },
+  hit_and_run:       { label: 'HIT & RUN',           icon: '↗',  category: 'MANAGER', desc: 'Next groundout/FC resolves as a single instead.' },
+  retain:            { label: 'HOLD ON',             icon: '🛡', category: 'MANAGER', desc: 'The next out this inning doesn\'t count.' },
   momentum:          { label: 'MOMENTUM',            icon: '⚡', category: 'EARNED',  desc: 'Advance any runner one base. Earned by grinding.' },
 };
 
