@@ -249,15 +249,25 @@ function moveRunners(result, oldOuts, oldBases, bInfo, opts = {}) {
     case 'groundout': {
       const adv2  = opts.advance2nd;    // 'safe' | 'out' | undefined
       const send3 = opts.sendRunner3rd; // 'safe' | 'out' | 'hold' | undefined(auto)
-      // 3rd runner: vacates unless explicitly held
       const held3rd = send3 === 'hold' || send3 === false;
-      // New 3rd: runner from 2nd if they advanced safely; else old 3rd if held; else null
-      const new3rd = adv2 === 'safe' ? r[1] : (held3rd ? r[2] : null);
-      // New 2nd: null if runner left (advance attempt); else forced from 1st or stays
-      const new2nd = (adv2 !== undefined && oldBases[1] && !oldBases[0])
-        ? null
-        : (oldBases[0] ? r[0] : r[1]);
-      state.baseRunners = [null, new2nd, new3rd];
+
+      if (oldBases[0] && oldBases[1]) {
+        // Force chain: 1st runner→2nd, 2nd runner→3rd (mandatory)
+        if (held3rd && oldBases[2]) {
+          // 3rd held AND 2nd forced there → 2nd runner is out; 3rd stays; 1st→2nd
+          state.baseRunners = [null, r[0], r[2]];
+        } else {
+          // 3rd vacated (scored/out) OR 3rd empty → 2nd runner advances to 3rd
+          state.baseRunners = [null, r[0], r[1]];
+        }
+      } else {
+        // Standard: optional voluntary advance from 2nd when 1st was empty
+        const new3rd = adv2 === 'safe' ? r[1] : (held3rd ? r[2] : null);
+        const new2nd = (adv2 !== undefined && oldBases[1] && !oldBases[0])
+          ? null
+          : (oldBases[0] ? r[0] : r[1]);
+        state.baseRunners = [null, new2nd, new3rd];
+      }
       break;
     }
     case 'DP':
@@ -360,12 +370,12 @@ function showGroundoutAdvModal(runner, prob, onDecide) {
   }, onDecide);
 }
 
-function showGroundout3rdModal(runner, prob, onDecide) {
+function showGroundout3rdModal(runner, prob, onDecide, basesLoaded = false) {
   showGroundoutRunnerModal({
     title: '🏃 Runner on 3rd',
     runnerName: runner?.playerName ?? 'Runner',
     pct: Math.round(prob * 100),
-    holdLabel: 'Hold at 3rd',
+    holdLabel: basesLoaded ? 'Hold (2nd runner forced out at 3rd)' : 'Hold at 3rd',
     sendLabel: 'Send Home',
   }, onDecide);
 }
@@ -507,12 +517,21 @@ document.getElementById('hand-container').addEventListener('click', e => {
       const runner2 = state.baseRunners[1];
       const can3rd  = !isDP && state.bases[2] && state.outs < 2;
 
+      const forcedChain = !isDP && state.bases[0] && state.bases[1]; // 1st+2nd both occupied
+
       // After all runner decisions, call finishABPlay with combined opts
       const finish = (send3, adv2) => {
         const notes = [];
         if (send3 === 'safe')  notes.push('3rd scores');
         if (send3 === 'out')   notes.push('3rd thrown out at home');
         if (send3 === 'hold')  notes.push('3rd holds');
+        if (forcedChain) {
+          if (send3 === 'hold' && state.bases[2]) {
+            notes.push('1st→2nd, 2nd forced out at 3rd');
+          } else {
+            notes.push('1st→2nd, 2nd→3rd (force)');
+          }
+        }
         if (adv2 === 'safe')   notes.push('2nd→3rd ✓');
         if (adv2 === 'out')    notes.push('2nd→3rd ✗ out');
         const runnerNote = notes.length ? ` [${notes.join(', ')}]` : '';
@@ -522,10 +541,11 @@ document.getElementById('hand-container').addEventListener('click', e => {
         finishABPlay(card, resolvedResult, opts, dpNote + runnerNote);
       };
 
-      // Decision for runner on 2nd (depends on whether 3rd is available after 3rd decision)
+      // Decision for runner on 2nd (only when 1st is empty — voluntary advance)
       const decide2nd = (send3) => {
         const thirdWillVacate = send3 === 'safe' || send3 === 'out';
         const thirdAvail = !state.bases[2] || thirdWillVacate;
+        // !state.bases[0] → 1st empty, so 2nd advance is voluntary (not a force chain)
         const canAdv2 = !isDP && state.bases[1] && !state.bases[0] && state.outs < 2 && thirdAvail;
         if (canAdv2) {
           const prob = computeGroundoutAdvProb(runner2);
@@ -538,7 +558,9 @@ document.getElementById('hand-container').addEventListener('click', e => {
       // Decision for runner on 3rd first, then chain to 2nd
       if (can3rd) {
         const prob = computeGroundout3rdProb(runner3);
-        showGroundout3rdModal(runner3, prob, result => decide2nd(result));
+        // When bases loaded, warn that holding 3rd forces 2nd runner out at 3rd
+        const basesLoaded = state.bases[0] && state.bases[1] && state.bases[2];
+        showGroundout3rdModal(runner3, prob, result => decide2nd(result), basesLoaded);
       } else {
         decide2nd(undefined);
       }

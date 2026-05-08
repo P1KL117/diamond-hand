@@ -36,18 +36,33 @@ export function processAB(result, bases, outs, { hitAndRun = false, sendRunner3r
       const nb = [...b];
       let runs = 0;
       let extraOuts = 0;
+
+      // Resolve runner on 3rd first (player decision: send home or hold)
       if (b[2] && o < 2) {
-        if (sendRunner3rd === 'safe') { runs++; nb[2] = false; }      // pre-rolled safe
-        else if (sendRunner3rd === 'out') { extraOuts++; nb[2] = false; } // pre-rolled out
+        if (sendRunner3rd === 'safe') { runs++; nb[2] = false; }
+        else if (sendRunner3rd === 'out') { extraOuts++; nb[2] = false; }
         else if (sendRunner3rd === 'hold' || sendRunner3rd === false) { /* hold */ }
-        else { runs++; nb[2] = false; }                               // default auto-score
+        else { runs++; nb[2] = false; } // no 3rd decision — auto-score
       }
-      if (b[0]) { nb[0] = false; nb[1] = true; } // runner on 1st forced to 2nd
-      // Optional advancement from 2nd (only when 1st was empty — not forced)
+
+      if (b[0] && b[1]) {
+        // Force chain: both bases occupied → 1st→2nd, 2nd→3rd (mandatory)
+        nb[0] = false; // nb[1] stays true (1st runner arrives at 2nd)
+        if (!nb[2]) {
+          nb[2] = true; // 2nd runner advances to now-vacant 3rd
+        } else {
+          // 3rd still occupied (held) — 2nd runner is forced out at 3rd
+          extraOuts++;
+        }
+      } else if (b[0]) {
+        nb[0] = false; nb[1] = true; // runner on 1st forced to 2nd
+      }
+
+      // Optional voluntary advance from 2nd (only when 1st was empty)
       if (advance2nd !== undefined && b[1] && !b[0]) {
-        nb[1] = false; // runner leaves 2nd either way
+        nb[1] = false;
         if (advance2nd === 'safe') nb[2] = true;
-        else extraOuts++;                         // thrown out at 3rd
+        else extraOuts++;
       }
       return { bases: nb, outs: o + 1 + extraOuts, runs };
     }
