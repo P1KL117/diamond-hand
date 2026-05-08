@@ -187,6 +187,7 @@ function startGame(feed, specials) {
   if (state.gameMode === 'solitaire' || state.playerSide === 'away') drawCards('away', 3);
   showScreen('game');
   renderAll();
+  clearTicker();
   addTickerEntry('Play ball!', 'divider');
 
   // If away team is opponent, start auto-play immediately
@@ -709,7 +710,6 @@ function endInning() {
   const half = state.isTop ? 'Top' : 'Bot', inning = state.inning;
   const skipBottom = state.isTop && state.inning === 9 && state.score.home > state.score.away;
   endHalfInning();
-  clearTicker();
   addTickerEntry(`─── End ${half} ${inning} ───`, 'divider');
   if (skipBottom) { addTickerEntry('─── Home leads — no bottom 9th ───', 'divider'); endGame(); return; }
   if (isGameOver()) { endGame(); return; }
