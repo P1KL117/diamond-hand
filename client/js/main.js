@@ -687,6 +687,7 @@ function applyFlyoutTagUp(card, decisions, tagProbs) {
   addTickerEntry(`${card.playerName}: ${RESULT_LABEL[card.result] ?? card.result}${noteStr}${runs > 0 ? `  +${runs}R` : ''}`);
   if (card.description) addTickerEntry(`  "${card.description.slice(0, 80)}"`, 'desc');
   checkOutMeter(card);
+  drawAndRefill();
   if (state.outs >= 3) { endInning(); return; }
   renderAll();
 }
