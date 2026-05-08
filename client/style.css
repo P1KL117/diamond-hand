@@ -389,11 +389,12 @@ html, body {
 }
 .event-card:hover:not(.disabled) { opacity: .85; transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.4); }
 .event-card.disabled { opacity: .2; cursor: not-allowed; }
-.event-card.sb    { background: #1d4ed8; color: #fff; }
-.event-card.cs    { background: #5b21b6; color: #fff; }
-.event-card.wp    { background: #0f766e; color: #fff; }
-.event-card.pb    { background: #0f766e; color: #fff; }
-.event-card.error { background: #92400e; color: #fff; }
+.event-card.sb       { background: #1d4ed8; color: #fff; }
+.event-card.cs       { background: #5b21b6; color: #fff; }
+.event-card.wp       { background: #0f766e; color: #fff; }
+.event-card.pb       { background: #0f766e; color: #fff; }
+.event-card.error    { background: #92400e; color: #fff; }
+.event-card.momentum { background: linear-gradient(135deg, #78350f, #92400e); color: #fde68a; border: 1px solid #d97706; }
 
 /* ── HAND ─────────────────────────────────────────────────────────────────── */
 .hand-section { flex: 1; overflow-y: auto; }

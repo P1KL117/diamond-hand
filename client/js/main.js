@@ -400,12 +400,10 @@ function checkOutMeter(card) {
     s.consecutiveOuts++;
     if (s.consecutiveOuts >= 5) {
       s.consecutiveOuts = 0;
-      const type = ALL_SPECIAL_TYPES[Math.floor(Math.random() * ALL_SPECIAL_TYPES.length)];
-      const newCard = { id: `grind-${Date.now()}`, type: 'special', specialType: type };
-      s.hand.push(newCard);
-      s.pendingRetain = newCard;
-      const name = SPECIAL_META[type]?.label ?? type;
-      addTickerEntry(`⚡ GRIND — "${name}" earned and retained!`, 'special-play');
+      // Grind card goes directly to bonus pool — never to hand, no retain needed
+      const grindCard = { id: `grind-${Date.now()}`, type: 'event', eventType: 'MOMENTUM', description: 'Advance any runner one base' };
+      s.eventCards.push({ ...grindCard, used: false });
+      addTickerEntry(`⚡ GRIND — Momentum earned! Added to bonus pool.`, 'special-play');
     }
   } else {
     s.consecutiveOuts = 0;
@@ -887,6 +885,34 @@ document.getElementById('event-pool').addEventListener('click', e => {
       const target = state[side].hand.find(c => c.id === chosen[0]?.id);
       if (target) { target.result = upgradeResult(target.result); target.upgraded = true; }
       addTickerEntry(`⬆ Error — ${target?.playerName ?? '?'} upgraded to ${target?.result ?? '?'}`, 'special-play');
+      renderAll();
+    });
+    return;
+  }
+
+  // MOMENTUM (grind earned) — player picks which runner to advance one base
+  if (card.eventType === 'MOMENTUM') {
+    const occupied = [0, 1, 2].filter(i => state.bases[i]);
+    if (!occupied.length) return;
+    const BASE_LABELS = ['1st → 2nd', '2nd → 3rd', '3rd → Home'];
+    showChoiceModal({
+      title: '⚡ MOMENTUM',
+      subtitle: 'Advance any one runner.',
+      options: occupied.map(i => ({
+        label: BASE_LABELS[i],
+        desc: state.baseRunners[i]?.playerName ?? 'Runner',
+        value: i,
+      })),
+    }, baseIdx => {
+      markEventCardUsed(card.id);
+      const nb = [...state.bases];
+      const nr = [...state.baseRunners];
+      let runs = 0;
+      if (baseIdx === 2) { nb[2] = false; nr[2] = null; runs = 1; }      // 3rd scores
+      else { nb[baseIdx] = false; nb[baseIdx + 1] = true; nr[baseIdx + 1] = nr[baseIdx]; nr[baseIdx] = null; }
+      state.bases = nb; state.baseRunners = nr; addRunsToScore(runs);
+      addTickerEntry(`⚡ Momentum — ${BASE_LABELS[baseIdx]}${runs ? '  +1R' : ''}`, 'special-play');
+      if (state.outs >= 3) { endInning(); return; }
       renderAll();
     });
     return;

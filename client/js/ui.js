@@ -291,7 +291,7 @@ export function renderEventPool() {
   const hand = state[currentSide()].hand;
   el.innerHTML = cards.map(c => {
     const m = EVENT_META[c.eventType] ?? { icon: '?', label: c.eventType, colorClass: '' };
-    const needsRunner = c.eventType === 'SB' || c.eventType === 'WP' || c.eventType === 'PB';
+    const needsRunner = c.eventType === 'SB' || c.eventType === 'WP' || c.eventType === 'PB' || c.eventType === 'MOMENTUM';
     const needsHand   = c.eventType === 'ERROR';
     const disabled = (needsRunner && !runners) || (needsHand && !hand.length);
     return `<button class="event-card ${c.eventType.toLowerCase()} ${disabled ? 'disabled' : ''}"
@@ -405,10 +405,11 @@ function specialCardHtml(card, discardMode, coachMode, isRetained = false, isUpg
 }
 
 const EVENT_META = {
-  SB:    { icon: '→', label: 'STOLEN BASE',  colorClass: 'ev-blue' },
-  WP:    { icon: '~', label: 'WILD PITCH',   colorClass: 'ev-teal' },
-  PB:    { icon: '~', label: 'PASSED BALL',  colorClass: 'ev-teal' },
-  ERROR: { icon: '⬆', label: 'ERROR',        colorClass: 'ev-orange' },
+  SB:       { icon: '→', label: 'STOLEN BASE',  colorClass: 'ev-blue' },
+  WP:       { icon: '~', label: 'WILD PITCH',   colorClass: 'ev-teal' },
+  PB:       { icon: '~', label: 'PASSED BALL',  colorClass: 'ev-teal' },
+  ERROR:    { icon: '⬆', label: 'ERROR',        colorClass: 'ev-orange' },
+  MOMENTUM: { icon: '⚡', label: 'MOMENTUM',    colorClass: 'ev-gold' },
 };
 
 function eventCardHtml(card, discardMode, coachMode) {
