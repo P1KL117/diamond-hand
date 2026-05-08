@@ -210,6 +210,21 @@ export function playSpecialCard(cardId) {
   }
 }
 
+// ── Shared helper: route a card to hand OR bonus pool based on its type ───────
+
+// Used by any special that lets the player take a card from the deck directly.
+// Event cards (SB/WP/PB/ERROR) must auto-pool; everything else goes to hand.
+export function routeCardToHandOrPool(side, card) {
+  const s = state[side];
+  if (card.type === 'event') {
+    s.eventCards.push({ ...card, used: false });
+    return 'pool';
+  } else {
+    s.hand.push(card);
+    return 'hand';
+  }
+}
+
 // ── Mound visit: peek 3, take 1, put 2 back on top of deck ───────────────────
 
 export function peekAndRemoveDeck(side, n) {
@@ -222,10 +237,11 @@ export function peekAndRemoveDeck(side, n) {
 export function commitMoundVisit(cardId, takenCard, returnedCards) {
   const side = currentSide();
   const s = state[side];
-  if (takenCard) s.hand.push(takenCard);
+  const dest = takenCard ? routeCardToHandOrPool(side, takenCard) : null;
   // Push returned in reverse so original order is preserved (first peeked = top of deck)
   if (returnedCards.length) s.deck.push(...[...returnedCards].reverse());
   burnSpecialCard(cardId);
+  return dest; // 'hand' | 'pool' | null — caller uses for ticker message
 }
 
 // ── Rain delay: peek 5, reorder, bottom 3 degrade ────────────────────────────
@@ -265,16 +281,28 @@ export function commitPitchingChange(specialCardId, chosenCards, replaceCardId, 
       s.deck.splice(pos, 0, replaced);
     }
   }
-  if (chosenCards?.length) s.hand.push(...chosenCards);
+  // Route each chosen card — event cards go to pool, others to hand
+  const pooled = [];
+  for (const card of (chosenCards ?? [])) {
+    const dest = routeCardToHandOrPool(side, card);
+    if (dest === 'pool') pooled.push(card);
+  }
   s.discard.push(...others);
+  return pooled; // caller can note which went to pool
 }
 
 export function commitDraw3(cardId, keepCards, discardCard) {
   const side = currentSide();
   const s = state[side];
-  s.hand.push(...keepCards);
+  // Route each kept card — event cards go to pool, others to hand
+  const pooled = [];
+  for (const card of keepCards) {
+    const dest = routeCardToHandOrPool(side, card);
+    if (dest === 'pool') pooled.push(card);
+  }
   if (discardCard) s.discard.push(discardCard);
   burnSpecialCard(cardId);
+  return pooled;
 }
 
 // ── Recalled from minors ──────────────────────────────────────────────────────

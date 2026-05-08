@@ -613,8 +613,9 @@ function handleSpecialCard(cardId) {
           subtitle: 'Select a hand card to shuffle back into the deck.',
           cards: handCards, minPick: 1, maxPick: 1, confirmLabel: 'Swap Out',
         }, (swapOut) => {
-          commitPitchingChange(cardId, chosen, swapOut[0]?.id ?? null, others);
-          addTickerEntry('⇄ Pitching Change — kept 2 deck picks, hand card shuffled back in', 'special-play');
+          const pooled = commitPitchingChange(cardId, chosen, swapOut[0]?.id ?? null, others);
+          const poolNote = pooled.length ? ` (${pooled.length} event → pool)` : '';
+          addTickerEntry(`⇄ Pitching Change — kept 2 picks, hand card shuffled back in${poolNote}`, 'special-play');
           drawAndRefill(); renderAll();
         });
       });
@@ -654,8 +655,9 @@ function handleSpecialCard(cardId) {
         cards: top3, minPick: 1, maxPick: 1, confirmLabel: 'Take This Card',
       }, (taken) => {
         const returned = top3.filter(c => c.id !== taken[0]?.id);
-        commitMoundVisit(cardId, taken[0] ?? null, returned);
-        addTickerEntry(`◉ Mound visit — took 1 card, 2 returned to deck top`, 'special-play');
+        const dest = commitMoundVisit(cardId, taken[0] ?? null, returned);
+        const destNote = dest === 'pool' ? ' (event card → bonus pool)' : dest === 'hand' ? ', 2 returned to deck top' : '';
+        addTickerEntry(`◉ Mound visit — took 1 card${destNote}`, 'special-play');
         drawAndRefill();
         renderAll();
       });
@@ -672,8 +674,10 @@ function handleSpecialCard(cardId) {
         cards: drawn, minPick: keepN, maxPick: keepN, confirmLabel: `Keep ${keepN === 2 ? 'These 2' : 'This 1'}`,
       }, (kept) => {
         const discard = drawn.find(c => !kept.find(k => k.id === c.id)) ?? null;
-        commitDraw3(cardId, kept, discard);
-        addTickerEntry(`⇅ Drew 3 — kept ${kept.length}, discarded ${discard ? 1 : 0}`, 'special-play');
+        const pooled = commitDraw3(cardId, kept, discard);
+        const poolNote = pooled.length ? ` (${pooled.length} event card${pooled.length > 1 ? 's' : ''} → bonus pool)` : '';
+        addTickerEntry(`⇅ Drew 3 — kept ${kept.length}, discarded ${discard ? 1 : 0}${poolNote}`, 'special-play');
+        drawAndRefill(); // refill if any kept cards went to pool instead of hand
         renderAll();
       });
       break;
