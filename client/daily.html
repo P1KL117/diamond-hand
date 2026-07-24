@@ -93,7 +93,7 @@
   <!-- GAMEDAY -->
   <div id="screen-gameday" class="screen">
     <div class="gameday-wrap">
-      <div class="gameday-top">
+      <div class="gameday-head">
         <div class="diamond-panel">
           <svg id="diamond-svg" viewBox="0 0 200 200" class="diamond">
             <rect x="0" y="0" width="200" height="200" fill="#111418" rx="4"/>
@@ -121,20 +121,18 @@
             </div>
           </div>
         </div>
-        <div class="gameday-right">
+        <div class="gameday-info">
           <div id="gd-scoreboard" class="scoreboard"></div>
           <div class="gd-runs-big"><span id="gd-runs">0</span><span class="gd-runs-label">RUNS</span></div>
+          <div class="ticker gd-ticker-box">
+            <div class="ticker-title">PLAY BY PLAY</div>
+            <div id="gd-ticker" class="ticker-log"></div>
+          </div>
         </div>
       </div>
-      <div class="gameday-mid">
-        <div class="ticker gd-ticker-box">
-          <div class="ticker-title">PLAY BY PLAY</div>
-          <div id="gd-ticker" class="ticker-log"></div>
-        </div>
-        <div class="gd-lineup-wrap">
-          <div class="gd-lineup-title">LINEUP</div>
-          <div id="gd-lineup" class="gd-lineup"></div>
-        </div>
+      <div class="gd-lineup-wrap">
+        <div class="gd-lineup-title">LINEUP</div>
+        <div id="gd-lineup" class="gd-lineup"></div>
       </div>
       <div class="gameday-controls">
         <button id="btn-gd-speed" class="btn-secondary">▶ 1×</button>

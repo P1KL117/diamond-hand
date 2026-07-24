@@ -186,21 +186,26 @@
 .lineup-row .lr-line.hot { color: var(--green); }
 .lineup-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
 
-/* ── GAMEDAY (fixed viewport height; ticker + lineup scroll internally) ──────── */
+/* ── GAMEDAY (fixed viewport height; play-by-play sits beside the diamond,
+   the lineup gets the full width below) ─────────────────────────────────────── */
 .gameday-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 14px; gap: 10px; max-width: 940px; margin: 0 auto; width: 100%; }
-.gameday-top { display: flex; gap: 16px; flex-shrink: 0; align-items: center; }
-.gameday-right { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.gd-runs-big { display: flex; align-items: baseline; gap: 8px; }
-.gd-runs-big #gd-runs { font-family: var(--font-display); font-size: 2.6rem; font-weight: 900; color: var(--gold2); line-height: 1; }
-.gd-runs-label { font-size: .78rem; color: var(--muted); letter-spacing: 2px; font-weight: 600; }
-
-.gameday-mid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.gd-ticker-box, .gd-lineup-wrap { min-height: 0; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
-.gd-ticker-box .ticker-log, #gd-lineup { flex: 1; overflow-y: auto; min-height: 0; }
+/* top: diamond on the left, scoreboard + runs + play-by-play on the right */
+.gameday-head { display: flex; gap: 14px; flex-shrink: 0; min-height: 0; align-items: stretch; height: 210px; max-height: 34vh; }
+.diamond-panel { flex-shrink: 0; }
+.gameday-info { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.gd-runs-big { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
+.gd-runs-big #gd-runs { font-family: var(--font-display); font-size: 2.2rem; font-weight: 900; color: var(--gold2); line-height: 1; }
+.gd-runs-label { font-size: .74rem; color: var(--muted); letter-spacing: 2px; font-weight: 600; }
+.gd-ticker-box { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.gd-ticker-box .ticker-log { flex: 1; overflow-y: auto; min-height: 0; }
 .ticker-entry.inning-divider {
   color: var(--gold2); text-align: center; font-family: var(--font-display); font-weight: 700;
   letter-spacing: 1px; font-size: .72rem; margin: 4px 0; opacity: .85;
 }
+
+/* lineup: full width, takes all remaining height */
+.gd-lineup-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
+#gd-lineup { flex: 1; overflow-y: auto; min-height: 0; }
 
 .gameday-controls { display: flex; justify-content: center; gap: 12px; flex-shrink: 0; }
 .gameday-controls button { min-width: 120px; }
@@ -341,7 +346,9 @@
 .gd-scoreboard .sb-table td, .gd-scoreboard .sb-table th { font-size: .72rem; }
 
 @media (max-width: 640px) {
-  .gameday-top { flex-direction: column; align-items: center; }
+  /* keep diamond + play-by-play side by side; give the lineup the space below */
+  .gameday-head { height: 150px; gap: 10px; }
+  .gd-runs-big #gd-runs { font-size: 1.7rem; }
   .home-title { font-size: 2.6rem; }
-  .draft-board { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .gdl-name { min-width: 84px; }
 }
