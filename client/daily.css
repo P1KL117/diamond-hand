@@ -13,6 +13,14 @@
 .home-title { font-family: var(--font-display); font-size: 3.4rem; font-weight: 900; letter-spacing: 2px; line-height: 1; }
 .home-tag { color: var(--muted2); font-size: .96rem; line-height: 1.55; max-width: 440px; }
 .home-date { font-size: .82rem; color: var(--muted); font-weight: 600; letter-spacing: 1px; }
+.mode-select { display: flex; gap: 6px; }
+.mode-chip {
+  font-family: var(--font-display); font-weight: 700; font-size: .82rem; letter-spacing: .5px;
+  padding: 7px 16px; border-radius: 18px; border: 1px solid var(--border2);
+  background: var(--surface2); color: var(--muted2); cursor: pointer; transition: all .12s;
+}
+.mode-chip.active { background: var(--gold); color: #000; border-color: var(--gold); }
+.mode-desc { font-size: .76rem; color: var(--muted); min-height: 1.1em; max-width: 400px; }
 .home-cta { font-size: 1.05rem; padding: 14px 34px; margin-top: 6px; }
 .home-best { font-size: .82rem; color: var(--gold2); min-height: 1em; }
 .home-how { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; width: 100%; max-width: 400px; }
@@ -162,6 +170,7 @@
 .gameday-controls button { min-width: 120px; }
 
 /* Live lineup panel */
+.ticker-entry.exhausted { color: var(--muted); font-style: italic; }
 .gd-lineup-wrap { display: flex; flex-direction: column; gap: 5px; }
 .gd-lineup-title { font-family: var(--font-display); font-size: .74rem; font-weight: 700; letter-spacing: 2px; color: var(--muted); }
 .gd-lineup { display: flex; flex-direction: column; gap: 3px; }

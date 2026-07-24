@@ -32,10 +32,11 @@ export function mapPA(pa) {
   return result ?? 'groundout'; // unknown non-hit → conservative out
 }
 
-// Short codes for the day-sequence display (e.g. 1B · out · 1B · HR)
+// Short codes for the day-sequence display (e.g. 1B · OUT · 1B · HR)
+// Outs read plainly as OUT; only strikeout (K) and double play (DP) stay distinct.
 export const SHORT_CODE = {
   HR: 'HR', triple: '3B', double: '2B', single: '1B', BB: 'BB', HBP: 'HBP',
-  K: 'K', groundout: 'GO', flyout: 'FO', lineout: 'LO', DP: 'DP', FC: 'FC', sac_fly: 'SF',
+  K: 'K', groundout: 'OUT', flyout: 'OUT', lineout: 'OUT', DP: 'DP', FC: 'OUT', sac_fly: 'SF',
 };
 export function seqCodes(results) { return results.map(r => SHORT_CODE[r] ?? r); }
 

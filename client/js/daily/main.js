@@ -2,6 +2,7 @@ import { fetchDailyPool, REQUIRED_POSITIONS } from './pool.js';
 import { createDraft } from './draft.js';
 import { playOut } from './playout.js';
 import { seqCodes } from './outcomes.js';
+import { seededRng } from './rng.js';
 
 // ── Date helpers ────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -22,6 +23,13 @@ let activeDate = GAME_DATE;
 let draftSort = 'value';
 let draftFilter = 'ALL';
 let sel = null; // { playerId, position } — currently selected player awaiting a slot tap
+let gameMode = 'daily'; // 'daily' | 'blind' | 'shuffled'
+
+const MODE_DESC = {
+  daily: 'See exactly what each player did last night. Pure lineup skill.',
+  blind: 'Last night\'s stats are hidden — draft on reputation and season numbers. The reveal comes at game time.',
+  shuffled: 'You see the stats, but each player\'s outcomes fire in a random order. Same cards, more chaos.',
+};
 
 const $ = id => document.getElementById(id);
 function show(name) {
@@ -58,11 +66,20 @@ function renderHome() {
   $('btn-start-draft').disabled = !pool.teams.length;
   const best = loadBest(activeDate);
   $('home-best').textContent = best != null ? `Your best today: ${best} runs` : '';
+  $('mode-desc').textContent = MODE_DESC[gameMode];
+  document.querySelectorAll('.mode-chip').forEach(c => c.classList.toggle('active', c.dataset.mode === gameMode));
 }
+
+$('mode-select').addEventListener('click', e => {
+  const chip = e.target.closest('.mode-chip'); if (!chip) return;
+  gameMode = chip.dataset.mode;
+  document.querySelectorAll('.mode-chip').forEach(c => c.classList.toggle('active', c.dataset.mode === gameMode));
+  $('mode-desc').textContent = MODE_DESC[gameMode];
+});
 
 // ── Draft ───────────────────────────────────────────────────────────────────
 function startDraft() {
-  draft = createDraft({ teams: pool.teams, date: activeDate, mode: 'daily' });
+  draft = createDraft({ teams: pool.teams, date: activeDate, mode: gameMode });
   draft.start();
   sel = null; draftFilter = 'ALL';
   renderDraft();
@@ -108,16 +125,21 @@ function rowHtml(p) {
   const eligible = open.length > 0;
   const posLabel = (eligible ? open : p.positions).join('/');
   const selected = sel && sel.playerId === p.id;
-  const seq = seqCodes(p.results).join(' · ') || '—';
+  const blind = gameMode === 'blind';
+
+  // Blind mode: hide last night's line; show season numbers instead (draft on reputation).
+  const sub = blind ? `${p.teamAbbr} · season` : `${p.teamAbbr} · ${p.line.summary} · ${seqCodes(p.results).join(' · ')}`;
   const s = p.stats;
-  const cols = [['AB', s.ab], ['H', s.h], ['HR', s.hr], ['RBI', s.rbi], ['BB', s.bb], ['TB', s.tb]];
+  const cols = blind
+    ? [['AVG', p.season.avg], ['HR', p.season.hr], ['RBI', p.season.rbi], ['OPS', p.season.ops], ['SB', p.season.sb]]
+    : [['AB', s.ab], ['H', s.h], ['HR', s.hr], ['RBI', s.rbi], ['BB', s.bb], ['TB', s.tb]];
   const stats = cols.map(([l, v]) =>
-    `<span class="stat"><span class="stat-num ${l === 'HR' && v > 0 ? 'hot' : ''}">${v}</span><span class="stat-lbl">${l}</span></span>`).join('');
+    `<span class="stat"><span class="stat-num">${v}</span><span class="stat-lbl">${l}</span></span>`).join('');
   return `<button class="prow ${eligible ? '' : 'disabled'} ${selected ? 'selected' : ''}" data-id="${p.id}" ${eligible ? '' : 'disabled'}>
     <span class="prow-badge">${posLabel}</span>
     <span class="prow-id">
       <span class="prow-name">${p.name}</span>
-      <span class="prow-sub">${p.teamAbbr} · ${p.line.summary} · ${seq}</span>
+      <span class="prow-sub">${sub}</span>
     </span>
     <span class="prow-stats">${stats}</span>
   </button>`;
@@ -250,7 +272,14 @@ const RESULT_VERB = {
 let gdState = null;
 
 function startGameday() {
-  const lineup = draft.lineup();
+  let lineup = draft.lineup();
+  // Shuffled mode: each player's outcomes fire in a random (but per-day deterministic) order
+  if (gameMode === 'shuffled') {
+    lineup = lineup.map(p => ({
+      ...p,
+      results: seededRng(`${activeDate}:shuffled:${p.id}`).shuffle(p.results),
+    }));
+  }
   const res = playOut(lineup);
   gdState = { res, lineup, i: 0, speed: 1, timer: null, finished: false };
   // reset visuals
@@ -270,8 +299,8 @@ function startGameday() {
 function renderGdLineup(uptoIndex) {
   const log = gdState.res.log;
   const lastSlot = uptoIndex > 0 ? log[uptoIndex - 1].slot : 0;
-  const used = Array(9).fill(0);
-  for (let k = 0; k < uptoIndex; k++) used[log[k].slot - 1]++;
+  const used = Array(9).fill(0);   // real ABs consumed (exhausted auto-outs don't count)
+  for (let k = 0; k < uptoIndex; k++) if (!log[k].exhausted) used[log[k].slot - 1]++;
   $('gd-lineup').innerHTML = gdState.lineup.map((p, idx) => {
     const codes = seqCodes(p.results);
     const u = used[idx], total = codes.length;
@@ -281,13 +310,16 @@ function renderGdLineup(uptoIndex) {
       return `<span class="gdl-code ${cls}">${c}</span>`;
     }).join('');
     const batting = (idx + 1) === lastSlot;
-    const done = u >= total;
-    return `<div class="gdl-row ${batting ? 'batting' : ''} ${done && !batting ? 'done' : ''}">
+    const spent = u >= total;
+    const absTxt = spent
+      ? `<span style="color:var(--muted)">${total}/${total} · spent</span>`
+      : `<span class="abs-hot">${u}/${total}</span> ABs`;
+    return `<div class="gdl-row ${batting ? 'batting' : ''} ${spent && !batting ? 'done' : ''}">
       <span class="gdl-slot">${idx + 1}</span>
       <span class="gdl-pos">${p.position}</span>
       <span class="gdl-name">${p.name}</span>
       <span class="gdl-seq">${seq}</span>
-      <span class="gdl-abs"><span class="${u < total ? 'abs-hot' : ''}">${u}/${total}</span> ABs</span>
+      <span class="gdl-abs">${absTxt}</span>
     </div>`;
   }).join('');
 }
@@ -306,9 +338,13 @@ function stepGameday() {
   setOuts(e.outsAfter);
   $('gd-runs').textContent = e.totalRuns;
   renderScoreboard(cumulativeInnings(gdState.i), e.totalRuns);
-  const verb = RESULT_VERB[e.result] ?? e.result;
   const runTxt = e.runsScored ? `  +${e.runsScored} run${e.runsScored > 1 ? 's' : ''}` : '';
-  addTicker(`${e.player} ${verb}${runTxt}`, e.runsScored ? 'run' : (isHitResult(e.result) ? 'hit' : ''));
+  if (e.exhausted) {
+    addTicker(`${e.player} out — no at-bats left`, 'exhausted');
+  } else {
+    const verb = RESULT_VERB[e.result] ?? e.result;
+    addTicker(`${e.player} ${verb}${runTxt}`, e.runsScored ? 'run' : (isHitResult(e.result) ? 'hit' : ''));
+  }
   renderGdLineup(gdState.i);
   scheduleNext();
 }
@@ -379,7 +415,7 @@ function renderScoreboard(inningRuns, total) {
 // ── Result ────────────────────────────────────────────────────────────────────
 function renderResult(res, lineup) {
   $('result-runs').textContent = res.runs;
-  $('result-sub').textContent = `${res.inningsPlayed} innings · ${res.totalPAs} at-bats · ended on ${res.endedBy === 'innings' ? '9 innings' : 'at-bat exhaustion'}`;
+  $('result-sub').textContent = `9 innings · ${res.realPAs} real at-bats used`;
 
   const per = cumulativeInnings(res.log.length);
   const cells = Array.from({ length: 9 }, (_, i) => `<td class="sb-cell">${per[i] != null ? per[i] : ''}</td>`).join('');

@@ -7,6 +7,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MLB = 'https://statsapi.mlb.com';
 
+// Landing page is the v2 Daily Lineup game; the v1 "Classic" game stays at /classic
+app.get('/', (_req, res) => res.sendFile(join(__dirname, '../client/daily.html')));
+app.get('/classic', (_req, res) => res.sendFile(join(__dirname, '../client/index.html')));
+
 app.use(express.static(join(__dirname, '../client'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
