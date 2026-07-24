@@ -29,7 +29,8 @@ if (process.env.DATABASE_URL) {
     runs int not null,
     mvp text,
     created_at timestamptz default now()
-  )`).then(() => db.query(`CREATE TABLE IF NOT EXISTS meta (key text primary key, val int)`))
+  )`).then(() => db.query(`ALTER TABLE scores ADD COLUMN IF NOT EXISTS lineup text`))
+    .then(() => db.query(`CREATE TABLE IF NOT EXISTS meta (key text primary key, val int)`))
     .then(() => db.query(`INSERT INTO meta (key,val) VALUES ('reset_gen',0) ON CONFLICT (key) DO NOTHING`))
     .then(() => db.query(`SELECT val FROM meta WHERE key='reset_gen'`))
     .then(({ rows }) => { resetGen = rows[0]?.val ?? 0; console.log('Leaderboard DB ready (Postgres), gen', resetGen); })
@@ -49,7 +50,7 @@ async function bumpGen() {
 async function boardTop(date, style) {
   if (db) {
     const { rows } = await db.query(
-      `SELECT initials, runs, mvp, created_at FROM scores
+      `SELECT initials, runs, mvp, lineup, created_at FROM scores
        WHERE date=$1 AND style=$2 ORDER BY runs DESC, created_at ASC LIMIT 25`, [date, style]);
     return rows;
   }
@@ -58,8 +59,8 @@ async function boardTop(date, style) {
 }
 async function boardInsert(row) {
   if (db) {
-    await db.query(`INSERT INTO scores (date, style, initials, runs, mvp) VALUES ($1,$2,$3,$4,$5)`,
-      [row.date, row.style, row.initials, row.runs, row.mvp]);
+    await db.query(`INSERT INTO scores (date, style, initials, runs, mvp, lineup) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [row.date, row.style, row.initials, row.runs, row.mvp, row.lineup]);
   } else {
     memScores.push({ ...row, created_at: Date.now() });
   }
@@ -89,7 +90,7 @@ app.get('/api/leaderboard', async (req, res) => {
 
 app.post('/api/leaderboard', async (req, res) => {
   try {
-    const { date, style, initials, runs, mvp } = req.body ?? {};
+    const { date, style, initials, runs, mvp, lineup } = req.body ?? {};
     const ini = String(initials ?? '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     const r = Number(runs);
     if (!date || !STYLES.has(style) || !ini || !Number.isInteger(r) || r < 0 || r > 200)
@@ -98,7 +99,7 @@ app.post('/api/leaderboard', async (req, res) => {
     // (Enforced in production; dev/in-memory stays permissive for testing.)
     if (db && date !== currentDailyDate && date !== baseDailyDate())
       return res.status(403).json({ error: 'submissions closed for this date' });
-    await boardInsert({ date, style, initials: ini, runs: r, mvp: String(mvp ?? '').slice(0, 200) });
+    await boardInsert({ date, style, initials: ini, runs: r, mvp: String(mvp ?? '').slice(0, 200), lineup: String(lineup ?? '').slice(0, 2000) });
     res.json({ enabled: true, gen: resetGen, scores: await boardTop(date, style), rank: await boardRank(date, style, r) });
   } catch (e) {
     res.status(500).json({ error: e.message });

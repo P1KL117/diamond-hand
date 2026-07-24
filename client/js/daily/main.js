@@ -552,10 +552,16 @@ function renderResult(res, lineup) {
       </div>
     </div>` : '';
 
-  // box score: this sim game's AB/R/H/RBI per player + their real day line
+  $('result-lineup').innerHTML = boxScoreTable(res, lineup);
+}
+
+// Box score table (this sim game's AB/R/H/RBI + real day line) — reused by the
+// result screen and the "view someone's lineup" modal.
+function boxScoreTable(res, lineup) {
+  const mvpId = res.mvp?.id;
   const rows = lineup.map(p => {
     const st = res.playerStats[p.id] ?? { AB: 0, R: 0, H: 0, RBI: 0 };
-    const isMvp = p.id === mvp?.id;
+    const isMvp = p.id === mvpId;
     return `<tr class="${isMvp ? 'is-mvp' : ''}">
       <td class="bs-slot">${p.battingSlot}</td>
       <td class="bs-pos">${p.position}</td>
@@ -564,15 +570,62 @@ function renderResult(res, lineup) {
       <td class="bs-line">${p.line.summary}</td>
     </tr>`;
   }).join('');
-  $('result-lineup').innerHTML = `
-    <table class="boxscore-table">
-      <thead><tr>
-        <th></th><th></th><th class="bs-name">BATTER</th>
-        <th>AB</th><th>R</th><th>H</th><th>RBI</th><th class="bs-line">Last night</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+  return `<table class="boxscore-table">
+    <thead><tr>
+      <th></th><th></th><th class="bs-name">BATTER</th>
+      <th>AB</th><th>R</th><th>H</th><th>RBI</th><th class="bs-line">Last night</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
+
+// Rebuild a stored lineup from the current pool and replay it (deterministic).
+function findPoolPlayer(id) {
+  for (const t of (pool?.teams ?? [])) { const p = t.players.find(x => x.id === id); if (p) return p; }
+  return null;
+}
+function rebuildLineup(spec, styleName) {
+  let lineup = spec.map(s => {
+    const p = findPoolPlayer(s.id);
+    return p ? { ...p, position: s.pos, battingSlot: s.slot } : null;
+  }).filter(Boolean).sort((a, b) => a.battingSlot - b.battingSlot);
+  if (styleName === 'shuffled') {
+    lineup = lineup.map(p => ({ ...p, results: seededRng(`${activeDate}:shuffled:${p.id}`).shuffle(p.results) }));
+  }
+  return lineup;
+}
+
+// Read-only modal: show what another player's lineup did.
+function showLineupModal(ini, dateStr, styleName, lineupRaw) {
+  let spec; try { spec = JSON.parse(decodeURIComponent(lineupRaw)); } catch { return; }
+  if (!Array.isArray(spec) || !spec.length) return;
+  if (dateStr !== (pool?.date)) return; // can only replay the currently-loaded daily
+  const lineup = rebuildLineup(spec, styleName);
+  if (lineup.length < spec.length) return;
+  const res = playOut(lineup);
+  const cmp = leagueCompare(res.runs);
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:560px">
+      <div class="modal-title">${ini}'s lineup — ${res.runs} runs</div>
+      <div class="modal-subtitle">${styleName} · beat ${cmp.beaten} of ${cmp.total} teams</div>
+      <div class="result-lineup" style="margin-top:8px">${boxScoreTable(res, lineup)}</div>
+      <div class="modal-actions"><button class="btn-primary" id="vl-close">Close</button></div>
+    </div>`;
+  modal.querySelector('#vl-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  $('app').appendChild(modal);
+}
+
+// Delegated: click a leaderboard row to view that player's lineup
+function onBoardClick(e) {
+  const tr = e.target.closest('tr[data-lineup]'); if (!tr) return;
+  if (!tr.dataset.lineup) return;
+  showLineupModal(tr.dataset.ini, tr.dataset.date, tr.dataset.style, tr.dataset.lineup);
+}
+$('result-leaderboard').addEventListener('click', onBoardClick);
+$('home-leaderboard').addEventListener('click', onBoardClick);
 
 $('btn-result-home').addEventListener('click', () => { renderHome(); show('home'); });
 
@@ -593,13 +646,17 @@ async function fetchLeaderboard(date, sty) {
   try { return await fetch(`/api/leaderboard?date=${date}&style=${sty}`).then(r => r.json()); }
   catch { return { enabled: false, scores: [] }; }
 }
-async function submitScore(date, sty, initials, runs, mvp) {
+async function submitScore(date, sty, initials, runs, mvp, lineup) {
   try {
     return await fetch('/api/leaderboard', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, style: sty, initials, runs, mvp }),
+      body: JSON.stringify({ date, style: sty, initials, runs, mvp, lineup }),
     }).then(r => r.json());
   } catch { return { enabled: false }; }
+}
+// Compact lineup spec stored with a score so it can be replayed for viewing.
+function lineupPayload(lineup) {
+  return JSON.stringify(lineup.map(p => ({ id: p.id, slot: p.battingSlot, pos: p.position })));
 }
 // Submit guard keyed by the server "reset generation" — an admin reset bumps
 // the generation, which invalidates these keys so nobody is locked out.
@@ -625,9 +682,10 @@ function mvpCell(raw) {
   </td>`;
 }
 
-function boardTable(scores, myInitials) {
+function boardTable(scores, myInitials, ctx = {}) {
   if (!scores.length) return '<div class="lb-empty">No scores yet — be the first!</div>';
   const total = (pool?.teams ?? []).length;
+  const viewable = ctx.date && ctx.date === pool?.date; // can replay only the loaded daily
   return `<table class="lb-table">
     <thead><tr>
       <th class="lb-rank">#</th><th class="lb-ini">WHO</th>
@@ -636,7 +694,9 @@ function boardTable(scores, myInitials) {
     <tbody>${scores.map((s, i) => {
     const me = myInitials && s.initials === myInitials ? 'me' : '';
     const beaten = total ? leagueCompare(s.runs).beaten : 0;
-    return `<tr class="${me}"><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-beat">${total ? `${beaten}/${total}` : '—'}</td>${mvpCell(s.mvp)}</tr>`;
+    const canView = viewable && s.lineup;
+    const data = canView ? `data-lineup="${encodeURIComponent(s.lineup)}" data-ini="${s.initials}" data-date="${ctx.date}" data-style="${ctx.style}"` : '';
+    return `<tr class="${me} ${canView ? 'lb-clickable' : ''}" ${data}><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-beat">${total ? `${beaten}/${total}` : '—'}</td>${mvpCell(s.mvp)}</tr>`;
   }).join('')}</tbody></table>`;
 }
 
@@ -653,8 +713,9 @@ async function renderResultLeaderboard() {
   // Only treat you as "already submitted" if the board actually has scores — an
   // empty board (fresh day or post-reset) always offers the submit box, so a
   // reset can never leave anyone locked out.
+  const ctx = { date, style: sty };
   if (data.scores.length && hasSubmitted(gen, date, sty)) {
-    el.innerHTML = title + boardTable(data.scores, hasSubmitted(gen, date, sty));
+    el.innerHTML = title + boardTable(data.scores, hasSubmitted(gen, date, sty), ctx);
     return;
   }
   el.innerHTML = `${title}
@@ -663,7 +724,7 @@ async function renderResultLeaderboard() {
       <input id="lb-initials" maxlength="3" placeholder="AAA" class="lb-input" autocomplete="off">
       <button id="lb-submit-btn" class="btn-primary">Submit</button>
     </div>
-    ${boardTable(data.scores)}`;
+    ${boardTable(data.scores, null, ctx)}`;
   const input = $('lb-initials');
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z]/g, ''); });
@@ -672,10 +733,10 @@ async function renderResultLeaderboard() {
     const ini = input.value.slice(0, 3);
     if (!ini) { input.focus(); return; }
     $('lb-submit-btn').disabled = true;
-    const out = await submitScore(date, sty, ini, res.runs, mvpPayload(res, gdState.lineup));
+    const out = await submitScore(date, sty, ini, res.runs, mvpPayload(res, gdState.lineup), lineupPayload(gdState.lineup));
     if (out.enabled) {
       markSubmitted(out.gen ?? gen, date, sty, ini);
-      el.innerHTML = `${title}<div class="lb-rank-line">You're #${out.rank}!</div>${boardTable(out.scores, ini)}`;
+      el.innerHTML = `${title}<div class="lb-rank-line">You're #${out.rank}!</div>${boardTable(out.scores, ini, ctx)}`;
     } else {
       $('lb-submit-btn').disabled = false;
     }
@@ -692,7 +753,7 @@ async function renderHomeLeaderboard() {
   const data = await fetchLeaderboard(reqDate, reqStyle);
   if (reqDate !== activeDate || reqStyle !== style || cadence !== 'daily') return; // selection changed
   if (!data.enabled) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="lb-title">TODAY'S TOP · ${reqStyle.toUpperCase()}</div>${boardTable(data.scores.slice(0, 5))}`;
+  el.innerHTML = `<div class="lb-title">TODAY'S TOP · ${reqStyle.toUpperCase()}</div>${boardTable(data.scores.slice(0, 5), null, { date: reqDate, style: reqStyle })}`;
 }
 
 // ── Best-score persistence (per date + style) ─────────────────────────────────

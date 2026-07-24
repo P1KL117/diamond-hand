@@ -328,6 +328,8 @@
 .lb-table th.lb-ini, .lb-table th.lb-mvp { text-align: left; }
 .lb-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .lb-table tr.me td { background: rgba(232,160,32,.12); }
+.lb-table tr.lb-clickable { cursor: pointer; }
+.lb-table tr.lb-clickable:hover td { background: var(--surface3); }
 .lb-rank { font-family: var(--font-display); font-weight: 700; color: var(--muted); width: 28px; text-align: center; }
 .lb-ini { font-family: var(--font-display); font-weight: 800; letter-spacing: 2px; color: var(--text); width: 54px; }
 .lb-runs { font-family: var(--font-display); font-weight: 800; color: var(--gold2); width: 44px; text-align: center; font-size: 1rem; }
