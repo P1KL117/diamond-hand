@@ -5,7 +5,7 @@ const REQ = new Set(REQUIRED_POSITIONS);
 
 // Rough value score for sorting the draft board (total bases + walks that night).
 function nightValue(results) {
-  const w = { HR: 4, triple: 3, double: 2, single: 1, BB: 0.5, HBP: 0.5 };
+  const w = { HR: 4, triple: 3, double: 2, single: 1, BB: 1, HBP: 1 };
   return results.reduce((s, r) => s + (w[r] ?? 0), 0);
 }
 
@@ -13,7 +13,7 @@ function nightValue(results) {
 function nightStats(results, pas) {
   const s = { ab: 0, h: 0, hr: 0, dbl: 0, tr: 0, bb: 0, tb: 0, rbi: 0 };
   results.forEach((r, i) => {
-    if (r === 'BB' || r === 'HBP') s.bb++;
+    if (r === 'BB' || r === 'HBP') { s.bb++; s.tb += 1; } // walks/HBP count as 1 total base
     else if (r !== 'sac_fly') s.ab++;
     if (r === 'single') { s.h++; s.tb += 1; }
     else if (r === 'double') { s.h++; s.dbl++; s.tb += 2; }
