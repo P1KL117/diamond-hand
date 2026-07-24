@@ -16,27 +16,38 @@ const STYLES = new Set(['normal', 'blind', 'shuffled']);
 let db = null;
 const memScores = []; // { date, style, initials, runs, mvp, created_at }
 
+let dbStatus = 'in-memory (no DATABASE_URL)';
 if (process.env.DATABASE_URL) {
   db = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false },
   });
-  db.query(`CREATE TABLE IF NOT EXISTS scores (
-    id serial primary key,
-    date text not null,
-    style text not null,
-    initials text not null,
-    runs int not null,
-    mvp text,
-    created_at timestamptz default now()
-  )`).then(() => db.query(`ALTER TABLE scores ADD COLUMN IF NOT EXISTS lineup text`))
-    .then(() => db.query(`CREATE TABLE IF NOT EXISTS meta (key text primary key, val int)`))
-    .then(() => db.query(`INSERT INTO meta (key,val) VALUES ('reset_gen',0) ON CONFLICT (key) DO NOTHING`))
-    .then(() => db.query(`SELECT val FROM meta WHERE key='reset_gen'`))
-    .then(({ rows }) => { resetGen = rows[0]?.val ?? 0; console.log('Leaderboard DB ready (Postgres), gen', resetGen); })
-    .catch(e => { console.error('DB init failed:', e.message); db = null; });
+  (async () => {
+    try {
+      await db.query('SELECT 1'); // connectivity check — only fall back if THIS fails
+    } catch (e) {
+      console.error('Postgres connect FAILED, using in-memory:', e.message);
+      db = null; dbStatus = 'in-memory (connect failed: ' + e.message + ')'; return;
+    }
+    // Schema setup — persistent tables; IF NOT EXISTS never drops data.
+    try {
+      await db.query(`CREATE TABLE IF NOT EXISTS scores (
+        id serial primary key, date text not null, style text not null,
+        initials text not null, runs int not null, mvp text,
+        created_at timestamptz default now())`);
+      await db.query(`ALTER TABLE scores ADD COLUMN IF NOT EXISTS lineup text`);
+      await db.query(`CREATE TABLE IF NOT EXISTS meta (key text primary key, val int)`);
+      await db.query(`INSERT INTO meta (key,val) VALUES ('reset_gen',0) ON CONFLICT (key) DO NOTHING`);
+      const { rows } = await db.query(`SELECT val FROM meta WHERE key='reset_gen'`);
+      resetGen = rows[0]?.val ?? 0;
+    } catch (e) {
+      console.error('DB schema warning (board still on Postgres):', e.message);
+    }
+    dbStatus = 'postgres';
+    console.log('Leaderboard DB ready (Postgres), gen', resetGen);
+  })();
 } else {
-  console.log('No DATABASE_URL — using in-memory leaderboard (ephemeral, local dev)');
+  console.log('No DATABASE_URL — using in-memory leaderboard (ephemeral, resets on deploy)');
 }
 
 // Reset generation: bumped on every admin reset so that clients' one-per-day
@@ -77,6 +88,10 @@ async function boardRank(date, style, runs) {
 // Landing page is the v2 Daily Lineup game; the v1 "Classic" game stays at /classic
 app.get('/', (_req, res) => res.sendFile(join(__dirname, '../client/daily.html')));
 app.get('/classic', (_req, res) => res.sendFile(join(__dirname, '../client/index.html')));
+
+// Diagnostics: is the leaderboard on Postgres (persistent) or in-memory (resets on deploy)?
+app.get('/api/health', (_req, res) =>
+  res.json({ storage: db ? 'postgres' : 'in-memory', detail: dbStatus, gen: resetGen, daily: currentDailyDate }));
 
 app.get('/api/leaderboard', async (req, res) => {
   try {
