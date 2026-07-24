@@ -682,22 +682,30 @@ function mvpCell(raw) {
   </td>`;
 }
 
-function boardTable(scores, myInitials, ctx = {}) {
+// Show the top 10. If `opts.myInitials`/`myRuns` identify the current player and
+// they're outside the top 10, pin their row below so they always see their result.
+function boardTable(scores, ctx = {}, opts = {}) {
   if (!scores.length) return '<div class="lb-empty">No scores yet — be the first!</div>';
   const total = (pool?.teams ?? []).length;
   const viewable = ctx.date && ctx.date === pool?.date; // can replay only the loaded daily
+  const myIdx = (opts.myInitials != null && opts.myRuns != null)
+    ? scores.findIndex(s => s.initials === opts.myInitials && s.runs === opts.myRuns)
+    : -1;
+  const rowHtml = (s, i) => {
+    const me = i === myIdx ? 'me' : '';
+    const beaten = total ? leagueCompare(s.runs).beaten : 0;
+    const canView = viewable && s.lineup;
+    const data = canView ? `data-lineup="${encodeURIComponent(s.lineup)}" data-ini="${s.initials}" data-date="${ctx.date}" data-style="${ctx.style}"` : '';
+    return `<tr class="${me} ${canView ? 'lb-clickable' : ''}" ${data}><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-beat">${total ? `${beaten}/${total}` : '—'}</td>${mvpCell(s.mvp)}</tr>`;
+  };
+  let body = scores.slice(0, 10).map((s, i) => rowHtml(s, i)).join('');
+  if (myIdx >= 10) body += `<tr class="lb-sep"><td colspan="5">· · ·</td></tr>` + rowHtml(scores[myIdx], myIdx);
   return `<table class="lb-table">
     <thead><tr>
       <th class="lb-rank">#</th><th class="lb-ini">WHO</th>
       <th class="lb-runs">RUNS</th><th class="lb-beat">BEAT</th><th class="lb-mvp">GAME MVP</th>
     </tr></thead>
-    <tbody>${scores.map((s, i) => {
-    const me = myInitials && s.initials === myInitials ? 'me' : '';
-    const beaten = total ? leagueCompare(s.runs).beaten : 0;
-    const canView = viewable && s.lineup;
-    const data = canView ? `data-lineup="${encodeURIComponent(s.lineup)}" data-ini="${s.initials}" data-date="${ctx.date}" data-style="${ctx.style}"` : '';
-    return `<tr class="${me} ${canView ? 'lb-clickable' : ''}" ${data}><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-beat">${total ? `${beaten}/${total}` : '—'}</td>${mvpCell(s.mvp)}</tr>`;
-  }).join('')}</tbody></table>`;
+    <tbody>${body}</tbody></table>`;
 }
 
 async function renderResultLeaderboard() {
@@ -715,7 +723,7 @@ async function renderResultLeaderboard() {
   // reset can never leave anyone locked out.
   const ctx = { date, style: sty };
   if (data.scores.length && hasSubmitted(gen, date, sty)) {
-    el.innerHTML = title + boardTable(data.scores, hasSubmitted(gen, date, sty), ctx);
+    el.innerHTML = title + boardTable(data.scores, ctx, { myInitials: hasSubmitted(gen, date, sty), myRuns: res.runs });
     return;
   }
   el.innerHTML = `${title}
@@ -724,7 +732,7 @@ async function renderResultLeaderboard() {
       <input id="lb-initials" maxlength="3" placeholder="AAA" class="lb-input" autocomplete="off">
       <button id="lb-submit-btn" class="btn-primary">Submit</button>
     </div>
-    ${boardTable(data.scores, null, ctx)}`;
+    ${boardTable(data.scores, ctx)}`;
   const input = $('lb-initials');
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z]/g, ''); });
@@ -736,7 +744,7 @@ async function renderResultLeaderboard() {
     const out = await submitScore(date, sty, ini, res.runs, mvpPayload(res, gdState.lineup), lineupPayload(gdState.lineup));
     if (out.enabled) {
       markSubmitted(out.gen ?? gen, date, sty, ini);
-      el.innerHTML = `${title}<div class="lb-rank-line">You're #${out.rank}!</div>${boardTable(out.scores, ini, ctx)}`;
+      el.innerHTML = `${title}<div class="lb-rank-line">You're #${out.rank}!</div>${boardTable(out.scores, ctx, { myInitials: ini, myRuns: res.runs })}`;
     } else {
       $('lb-submit-btn').disabled = false;
     }
@@ -753,7 +761,7 @@ async function renderHomeLeaderboard() {
   const data = await fetchLeaderboard(reqDate, reqStyle);
   if (reqDate !== activeDate || reqStyle !== style || cadence !== 'daily') return; // selection changed
   if (!data.enabled) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="lb-title">TODAY'S TOP · ${reqStyle.toUpperCase()}</div>${boardTable(data.scores.slice(0, 5), null, { date: reqDate, style: reqStyle })}`;
+  el.innerHTML = `<div class="lb-title">TODAY'S TOP · ${reqStyle.toUpperCase()}</div>${boardTable(data.scores, { date: reqDate, style: reqStyle })}`;
 }
 
 // ── Best-score persistence (per date + style) ─────────────────────────────────
