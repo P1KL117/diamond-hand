@@ -65,7 +65,8 @@ function advanceRunners(result, occ, outsBefore, batterId) {
 export function playOut(lineup) {
   const ptr = lineup.map(() => 0);
   const byId = {};
-  for (const p of lineup) byId[p.id] = { id: p.id, name: p.name, position: p.position, R: 0, RBI: 0, rv: 0 };
+  for (const p of lineup) byId[p.id] = { id: p.id, name: p.name, position: p.position, AB: 0, H: 0, R: 0, RBI: 0, rv: 0 };
+  const isHit = r => r === 'HR' || r === 'triple' || r === 'double' || r === 'single';
 
   let occ = [null, null, null]; // player ids on 1st,2nd,3rd
   let outs = 0, inning = 1, runs = 0, slot = 0, curInningRuns = 0;
@@ -85,9 +86,14 @@ export function playOut(lineup) {
     const r = scorers.length;
     const newOuts = outs + outsAdded;
 
-    // credit runs & RBIs
+    // credit runs, RBIs, at-bats & hits
     for (const sid of scorers) if (byId[sid]) byId[sid].R++;
-    if (!exhausted && result !== 'DP') byId[player.id].RBI += r;
+    if (!exhausted) {
+      const st = byId[player.id];
+      if (result !== 'DP') st.RBI += r;
+      if (result !== 'BB' && result !== 'HBP' && result !== 'sac_fly') st.AB++;
+      if (isHit(result)) st.H++;
+    }
 
     // run value (RE24) x leverage, credited to the batter
     const reAfter = newOuts >= 3 ? 0 : runExp(newOcc, newOuts);

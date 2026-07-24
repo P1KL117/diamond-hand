@@ -2,10 +2,14 @@ import { REQUIRED_POSITIONS } from './pool.js';
 import { seededRng } from './rng.js';
 
 // Pure draft state machine for the Daily Lineup positional draft.
-// Each round rolls a team (deterministic by date seed); the player picks one
-// eligible batter (a still-open defensive position) and assigns a batting slot.
-export function createDraft({ teams, date, mode = 'daily' }) {
-  const rng = seededRng(`${date}:${mode}`);
+// Each round rolls a team; the player picks one eligible batter (a still-open
+// defensive position) and assigns a batting slot.
+// Daily (deterministic) → same team rolls for everyone that day. Free Play
+// (deterministic:false) → a fresh random roll sequence on every draft.
+export function createDraft({ teams, date, style = 'normal', deterministic = true }) {
+  const rng = deterministic
+    ? seededRng(`${date}:${style}`)
+    : seededRng(`${date}:${style}:${Date.now()}:${Math.random()}`);
   const positions = [...REQUIRED_POSITIONS];
   const totalRounds = positions.length; // 9
 

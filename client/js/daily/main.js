@@ -28,12 +28,18 @@ let activeDate = GAME_DATE;
 let draftSort = 'tb';
 let draftFilter = 'ALL';
 let sel = null; // { playerId, position } — currently selected player awaiting a slot tap
-let gameMode = 'daily'; // 'daily' | 'blind' | 'shuffled'
+let cadence = 'daily'; // 'daily' | 'free'
+let style = 'normal';  // 'normal' | 'blind' | 'shuffled'
+let dailyDate = null;  // the resolved daily slate (Daily cadence locks to this)
 
-const MODE_DESC = {
-  daily: 'See exactly what each player did last night. Pure lineup skill.',
-  blind: 'Last night\'s stats are hidden — draft on reputation and season numbers. The reveal comes at game time.',
-  shuffled: 'You see the stats, but each player\'s outcomes fire in a random order. Same cards, more chaos.',
+const STYLE_DESC = {
+  normal: 'See exactly what each player did — pure lineup construction.',
+  blind: 'Stats hidden at the draft — pick on reputation, reveal at game time.',
+  shuffled: 'You see the stats, but each player\'s outcomes fire in a random order.',
+};
+const CADENCE_DESC = {
+  daily: 'Today\'s slate · same draft for everyone · counts on the leaderboard.',
+  free: 'Random teams · pick any date · unlimited · not ranked.',
 };
 
 const $ = id => document.getElementById(id);
@@ -63,6 +69,8 @@ async function boot() {
     $('home-date').textContent = `Failed to load: ${e.message}`;
     return;
   }
+  dailyDate = activeDate;                 // Daily cadence is locked to this slate
+  $('date-picker').value = activeDate;
   renderHome();
 }
 
@@ -77,22 +85,41 @@ function renderHome() {
     ? `${label} ${fmtDate(activeDate)} · ${pool.teams.length} teams`
     : 'No completed games found for that date.';
   $('btn-start-draft').disabled = !pool.teams.length;
-  const best = loadBest(activeDate);
-  $('home-best').textContent = best != null ? `Your best today: ${best} runs` : '';
-  $('mode-desc').textContent = MODE_DESC[gameMode];
-  document.querySelectorAll('.mode-chip').forEach(c => c.classList.toggle('active', c.dataset.mode === gameMode));
+
+  // active chips
+  document.querySelectorAll('#cadence-select .mode-chip').forEach(c => c.classList.toggle('active', c.dataset.cadence === cadence));
+  document.querySelectorAll('#style-select .mode-chip').forEach(c => c.classList.toggle('active', c.dataset.style === style));
+  $('date-group').style.display = cadence === 'free' ? '' : 'none';
+  $('mode-desc').textContent = `${CADENCE_DESC[cadence]}  ${STYLE_DESC[style]}`;
+
+  const best = loadBest(activeDate, style);
+  $('home-best').textContent = best != null ? `Your best (${style}): ${best} runs` : '';
+  renderHomeLeaderboard();
 }
 
-$('mode-select').addEventListener('click', e => {
+$('cadence-select').addEventListener('click', async e => {
   const chip = e.target.closest('.mode-chip'); if (!chip) return;
-  gameMode = chip.dataset.mode;
-  document.querySelectorAll('.mode-chip').forEach(c => c.classList.toggle('active', c.dataset.mode === gameMode));
-  $('mode-desc').textContent = MODE_DESC[gameMode];
+  cadence = chip.dataset.cadence;
+  if (cadence === 'daily' && activeDate !== dailyDate) {
+    activeDate = dailyDate; pool = await fetchDailyPool(dailyDate);
+  }
+  renderHome();
+});
+$('style-select').addEventListener('click', e => {
+  const chip = e.target.closest('.mode-chip'); if (!chip) return;
+  style = chip.dataset.style;
+  renderHome();
+});
+$('date-picker').addEventListener('change', async e => {
+  const d = e.target.value; if (!d) return;
+  $('home-date').textContent = 'Loading…';
+  try { pool = await fetchDailyPool(d); activeDate = d; } catch { pool = { teams: [] }; }
+  renderHome();
 });
 
 // ── Draft ───────────────────────────────────────────────────────────────────
 function startDraft() {
-  draft = createDraft({ teams: pool.teams, date: activeDate, mode: gameMode });
+  draft = createDraft({ teams: pool.teams, date: activeDate, style, deterministic: cadence === 'daily' });
   draft.start();
   sel = null; draftFilter = 'ALL';
   renderDraft();
@@ -141,7 +168,7 @@ function rowHtml(p) {
   const eligible = open.length > 0;
   const posLabel = (eligible ? open : p.positions).join('/');
   const selected = sel && sel.playerId === p.id;
-  const blind = gameMode === 'blind';
+  const blind = style === 'blind';
   const s = p.stats;
 
   // Right-side stat cluster — a clean, spaced set (fewer columns than before).
@@ -306,15 +333,15 @@ let gdState = null;
 
 function startGameday() {
   let lineup = draft.lineup();
-  // Shuffled mode: each player's outcomes fire in a random (but per-day deterministic) order
-  if (gameMode === 'shuffled') {
+  // Shuffled style: each player's outcomes fire in a random (per-day deterministic) order
+  if (style === 'shuffled') {
     lineup = lineup.map(p => ({
       ...p,
       results: seededRng(`${activeDate}:shuffled:${p.id}`).shuffle(p.results),
     }));
   }
   const res = playOut(lineup);
-  gdState = { res, lineup, i: 0, speed: 1, timer: null, finished: false };
+  gdState = { res, lineup, i: 0, speed: 1, timer: null, finished: false, lastInning: 0, cadence, style, date: activeDate };
   // reset visuals
   setBases([false, false, false]);
   setOuts(0);
@@ -323,6 +350,9 @@ function startGameday() {
   $('gd-ticker').innerHTML = '';
   renderScoreboard([], 0);
   $('btn-gd-speed').textContent = '▶ 1×';
+  $('btn-gd-speed').style.display = '';
+  $('btn-gd-skip').style.display = '';
+  $('btn-gd-results').style.display = 'none';
   renderGdLineup(0);
   show('gameday');
   scheduleNext();
@@ -360,12 +390,24 @@ function renderGdLineup(uptoIndex) {
 const SPEED_MS = { 1: 900, 2: 450, 4: 200 };
 function scheduleNext() {
   if (!gdState || gdState.finished) return;
-  if (gdState.i >= gdState.res.log.length) { finishGameday(); return; }
+  if (gdState.i >= gdState.res.log.length) { onAnimComplete(); return; }
   gdState.timer = setTimeout(stepGameday, SPEED_MS[gdState.speed]);
+}
+
+// Reached the last play — stop and wait for an explicit "See Results" click.
+function onAnimComplete() {
+  gdState.finished = true;
+  $('btn-gd-speed').style.display = 'none';
+  $('btn-gd-skip').style.display = 'none';
+  $('btn-gd-results').style.display = '';
 }
 
 function stepGameday() {
   const e = gdState.res.log[gdState.i++];
+  if (e.inning !== gdState.lastInning) {
+    addTicker(`─── Inning ${e.inning} ───`, 'inning-divider');
+    gdState.lastInning = e.inning;
+  }
   setInning(e.inning, true);
   setBases(e.basesAfter);
   setOuts(e.outsAfter);
@@ -397,7 +439,7 @@ function cumulativeInnings(uptoIndex) {
 function finishGameday() {
   gdState.finished = true;
   renderResult(gdState.res, gdState.lineup);
-  saveBest(activeDate, gdState.res.runs);
+  saveBest(gdState.date, gdState.style, gdState.res.runs);
   show('result');
 }
 
@@ -409,6 +451,7 @@ function skipToScore() {
 }
 
 $('btn-gd-skip').addEventListener('click', skipToScore);
+$('btn-gd-results').addEventListener('click', () => finishGameday());
 $('btn-gd-speed').addEventListener('click', () => {
   if (!gdState) return;
   gdState.speed = gdState.speed === 1 ? 2 : gdState.speed === 2 ? 4 : 1;
@@ -468,19 +511,26 @@ function renderResult(res, lineup) {
       <div class="mvp-line">${mvpPlayer?.teamAbbr ?? ''} ${mvp.position} · ${mvp.RBI} RBI · ${mvp.R} R</div>
     </div>` : '';
 
-  // box score: this sim game's R / RBI per player, plus their real day line
-  $('result-lineup').innerHTML = `
-    <div class="rl-box-head"><span class="rb-pos"></span><span class="rb-name"></span><span class="rb-rrbi">R&nbsp;&nbsp;RBI</span><span class="rb-line">last night</span></div>
-    ${lineup.map(p => {
-    const st = res.playerStats[p.id] ?? { R: 0, RBI: 0 };
+  // box score: this sim game's AB/R/H/RBI per player + their real day line
+  const rows = lineup.map(p => {
+    const st = res.playerStats[p.id] ?? { AB: 0, R: 0, H: 0, RBI: 0 };
     const isMvp = p.id === mvp?.id;
-    return `<div class="rl-box-row ${isMvp ? 'is-mvp' : ''}">
-      <span class="rb-pos">${p.position}</span>
-      <span class="rb-name">${p.battingSlot}. ${p.name} <span style="color:var(--muted)">${p.teamAbbr}</span></span>
-      <span class="rb-rrbi"><b>${st.R}</b>&nbsp;&nbsp;<b>${st.RBI}</b></span>
-      <span class="rb-line">${p.line.summary}</span>
-    </div>`;
-  }).join('')}`;
+    return `<tr class="${isMvp ? 'is-mvp' : ''}">
+      <td class="bs-slot">${p.battingSlot}</td>
+      <td class="bs-pos">${p.position}</td>
+      <td class="bs-name">${p.name}${isMvp ? ' <span class="bs-mvp">★</span>' : ''}<span class="bs-team">${p.teamAbbr}</span></td>
+      <td>${st.AB}</td><td>${st.R}</td><td>${st.H}</td><td class="bs-rbi">${st.RBI}</td>
+      <td class="bs-line">${p.line.summary}</td>
+    </tr>`;
+  }).join('');
+  $('result-lineup').innerHTML = `
+    <table class="boxscore-table">
+      <thead><tr>
+        <th></th><th></th><th class="bs-name">BATTER</th>
+        <th>AB</th><th>R</th><th>H</th><th>RBI</th><th class="bs-line">Last night</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 $('btn-result-home').addEventListener('click', () => { renderHome(); show('home'); });
@@ -497,12 +547,19 @@ $('btn-share').addEventListener('click', () => {
   });
 });
 
-// ── Best-score persistence ────────────────────────────────────────────────────
-function bestKey(date) { return `dh-best-${date}`; }
-function loadBest(date) { const v = localStorage.getItem(bestKey(date)); return v == null ? null : Number(v); }
-function saveBest(date, runs) {
-  const cur = loadBest(date);
-  if (cur == null || runs > cur) localStorage.setItem(bestKey(date), String(runs));
+// ── Home leaderboard peek (populated in the leaderboard step) ─────────────────
+function renderHomeLeaderboard() {
+  const el = $('home-leaderboard');
+  if (!el) return;
+  el.innerHTML = ''; // wired up with the leaderboard backend
+}
+
+// ── Best-score persistence (per date + style) ─────────────────────────────────
+function bestKey(date, sty) { return `dh-best-${date}-${sty}`; }
+function loadBest(date, sty) { const v = localStorage.getItem(bestKey(date, sty)); return v == null ? null : Number(v); }
+function saveBest(date, sty, runs) {
+  const cur = loadBest(date, sty);
+  if (cur == null || runs > cur) localStorage.setItem(bestKey(date, sty), String(runs));
 }
 
 boot();

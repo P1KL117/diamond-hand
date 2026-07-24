@@ -19,14 +19,29 @@
       <h1 class="home-title">DIAMOND HAND</h1>
       <p class="home-tag">Draft a lineup from last night's players. They hit exactly what they really did. Score as many runs as you can.</p>
       <div id="home-date" class="home-date"></div>
-      <div class="mode-select" id="mode-select">
-        <button class="mode-chip active" data-mode="daily">Daily</button>
-        <button class="mode-chip" data-mode="blind">Blind</button>
-        <button class="mode-chip" data-mode="shuffled">Shuffled</button>
+      <div class="mode-group">
+        <div class="mode-label">MODE</div>
+        <div class="mode-select" id="cadence-select">
+          <button class="mode-chip active" data-cadence="daily">Daily</button>
+          <button class="mode-chip" data-cadence="free">Free Play</button>
+        </div>
+      </div>
+      <div class="mode-group">
+        <div class="mode-label">STYLE</div>
+        <div class="mode-select" id="style-select">
+          <button class="mode-chip active" data-style="normal">Normal</button>
+          <button class="mode-chip" data-style="blind">Blind</button>
+          <button class="mode-chip" data-style="shuffled">Shuffled</button>
+        </div>
+      </div>
+      <div class="mode-group" id="date-group" style="display:none">
+        <div class="mode-label">DATE</div>
+        <input type="date" id="date-picker" class="date-picker">
       </div>
       <div id="mode-desc" class="mode-desc"></div>
-      <button id="btn-start-draft" class="btn-primary home-cta">Start Today's Draft →</button>
+      <button id="btn-start-draft" class="btn-primary home-cta">Start Draft →</button>
       <div id="home-best" class="home-best"></div>
+      <div id="home-leaderboard" class="home-leaderboard"></div>
       <div class="home-how">
         <div class="how-step"><span class="how-num">1</span> A random team is rolled each round</div>
         <div class="how-step"><span class="how-num">2</span> Pick a player &amp; slot them in your order</div>
@@ -109,19 +124,22 @@
         <div class="gameday-right">
           <div id="gd-scoreboard" class="scoreboard"></div>
           <div class="gd-runs-big"><span id="gd-runs">0</span><span class="gd-runs-label">RUNS</span></div>
-          <div class="ticker">
-            <div class="ticker-title">PLAY BY PLAY</div>
-            <div id="gd-ticker" class="ticker-log"></div>
-          </div>
         </div>
       </div>
-      <div class="gd-lineup-wrap">
-        <div class="gd-lineup-title">LINEUP</div>
-        <div id="gd-lineup" class="gd-lineup"></div>
+      <div class="gameday-mid">
+        <div class="ticker gd-ticker-box">
+          <div class="ticker-title">PLAY BY PLAY</div>
+          <div id="gd-ticker" class="ticker-log"></div>
+        </div>
+        <div class="gd-lineup-wrap">
+          <div class="gd-lineup-title">LINEUP</div>
+          <div id="gd-lineup" class="gd-lineup"></div>
+        </div>
       </div>
       <div class="gameday-controls">
         <button id="btn-gd-speed" class="btn-secondary">▶ 1×</button>
-        <button id="btn-gd-skip" class="btn-primary">Skip to Score ⏭</button>
+        <button id="btn-gd-skip" class="btn-secondary">Skip ⏭</button>
+        <button id="btn-gd-results" class="btn-primary" style="display:none">See Results →</button>
       </div>
     </div>
   </div>
