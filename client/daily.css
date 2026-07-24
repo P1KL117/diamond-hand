@@ -127,7 +127,8 @@
   padding: 2px 8px; border-radius: 5px; border: 1px solid var(--border2); background: var(--surface3); color: var(--muted2);
 }
 .seq-chip.hit { color: var(--green); border-color: rgba(24,207,110,.4); background: rgba(24,207,110,.08); }
-.seq-chip.walk { color: #6faaff; border-color: rgba(59,130,246,.35); background: rgba(59,130,246,.08); }
+.seq-chip.walk { color: #37d99a; border-color: rgba(45,212,160,.4); background: rgba(45,212,160,.08); }
+.seq-chip.dp { color: var(--red); border-color: rgba(240,53,53,.45); background: rgba(240,53,53,.1); }
 .seq-chip.out { color: var(--muted2); }
 
 /* Narrow screens: stack identity / sequence / stats */

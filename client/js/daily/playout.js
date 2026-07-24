@@ -78,7 +78,9 @@ export function playOut(lineup) {
     const exhausted = ptr[slot] >= player.results.length;
     // A phantom (out-of-ABs) batter is a clean out — no runner advances.
     let result = exhausted ? 'K' : player.results[ptr[slot]++];
-    if (result === 'DP' && occ[0] == null) result = 'groundout';
+    // A double play needs a runner on first to double off, and can't happen with
+    // 2 outs already — otherwise it's just a single (inning-ending) out.
+    if (result === 'DP' && (occ[0] == null || outs >= 2)) result = 'groundout';
 
     const reBefore = runExp(occ, outs);
     const basesBefore = occ.map(x => x != null);

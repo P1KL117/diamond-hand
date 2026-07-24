@@ -152,7 +152,9 @@ function matchesFilter(p) {
   return p.positions.some(pos => (POS_GROUPS[draftFilter] || []).includes(pos));
 }
 
-const SEQ_CLASS = c => ['1B', '2B', '3B', 'HR'].includes(c) ? 'hit' : (c === 'BB' || c === 'HBP') ? 'walk' : 'out';
+const SEQ_CLASS = c => ['1B', '2B', '3B', 'HR'].includes(c) ? 'hit'
+  : (c === 'BB' || c === 'HBP') ? 'walk'
+  : c === 'DP' ? 'dp' : 'out';
 const seqChips = codes => codes.map(c => `<span class="seq-chip ${SEQ_CLASS(c)}">${c}</span>`).join('');
 
 function rowHtml(p) {
