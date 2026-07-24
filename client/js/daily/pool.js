@@ -9,6 +9,21 @@ function nightValue(results) {
   return results.reduce((s, r) => s + (w[r] ?? 0), 0);
 }
 
+// That night's box-score line for the draft board's stat columns.
+function nightStats(results, pas) {
+  const s = { ab: 0, h: 0, hr: 0, dbl: 0, tr: 0, bb: 0, tb: 0, rbi: 0 };
+  results.forEach((r, i) => {
+    if (r === 'BB' || r === 'HBP') s.bb++;
+    else if (r !== 'sac_fly') s.ab++;
+    if (r === 'single') { s.h++; s.tb += 1; }
+    else if (r === 'double') { s.h++; s.dbl++; s.tb += 2; }
+    else if (r === 'triple') { s.h++; s.tr++; s.tb += 3; }
+    else if (r === 'HR') { s.h++; s.hr++; s.tb += 4; }
+    s.rbi += pas[i]?.rbi || 0;
+  });
+  return s;
+}
+
 // Fetch the day's pool and augment each player with mapped results + a batting line.
 // Only players at a standard defensive position are offered (keeps the positional
 // draft clean and dead-end-free).
@@ -35,6 +50,7 @@ export async function fetchDailyPool(date) {
           line: battingLine(p.pas),
           hits: results.filter(isHit).length,
           value: nightValue(results),
+          stats: nightStats(results, p.pas),
         };
       })
       .filter(Boolean),

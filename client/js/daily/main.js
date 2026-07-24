@@ -1,6 +1,7 @@
 import { fetchDailyPool, REQUIRED_POSITIONS } from './pool.js';
 import { createDraft } from './draft.js';
 import { playOut } from './playout.js';
+import { seqCodes } from './outcomes.js';
 
 // ── Date helpers ────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -16,6 +17,11 @@ const FALLBACK_DATE = '2024-09-01'; // used if the target date has no final game
 let pool = null;
 let draft = null;
 let activeDate = GAME_DATE;
+
+// draft UI state
+let draftSort = 'value';
+let draftFilter = 'ALL';
+let sel = null; // { playerId, position } — currently selected player awaiting a slot tap
 
 const $ = id => document.getElementById(id);
 function show(name) {
@@ -58,117 +64,162 @@ function renderHome() {
 function startDraft() {
   draft = createDraft({ teams: pool.teams, date: activeDate, mode: 'daily' });
   draft.start();
+  sel = null; draftFilter = 'ALL';
   renderDraft();
   show('draft');
 }
 
-const POS_LABEL = { C: 'C', '1B': '1B', '2B': '2B', '3B': '3B', SS: 'SS', LF: 'LF', CF: 'CF', RF: 'RF', DH: 'DH' };
+const lastName = n => n.split(' ').slice(-1)[0];
+const POS_GROUPS = { IF: ['1B', '2B', '3B', 'SS'], OF: ['LF', 'CF', 'RF'], C: ['C'], DH: ['DH'] };
+const FILTERS = ['ALL', 'IF', 'OF', 'C', 'DH'];
 
 function renderDraft() {
-  $('draft-round-label').textContent = `Round ${Math.min(draft.round + 1, draft.totalRounds)} / ${draft.totalRounds}`;
-
-  // position tracker
-  $('position-tracker').innerHTML = REQUIRED_POSITIONS.map(pos => {
-    const filledPlayer = draft.slots.find(s => s && s.position === pos);
-    const cls = filledPlayer ? 'filled' : 'open';
-    const fill = filledPlayer ? `<span class="pos-fill">${filledPlayer.name.split(' ').slice(-1)[0]}</span>` : '';
-    return `<span class="pos-chip ${cls}">${POS_LABEL[pos]}${fill}</span>`;
-  }).join('');
-
-  // rolled team
   const t = draft.currentTeam;
-  $('draft-rolled').innerHTML = t
-    ? `<span class="roll-label">YOU ROLLED</span>
-       <span class="roll-team">${t.abbreviation}</span>
-       <span class="roll-vs">${t.name} vs ${t.opponent}</span>
-       <button id="btn-reroll" class="btn-secondary reroll-btn" ${draft.rerollsLeft ? '' : 'disabled'}>
-         🎲 Reroll (${draft.rerollsLeft} left)</button>`
-    : '<span class="roll-label">No eligible team — draft complete</span>';
+  $('draft-round-label').textContent = `Round ${Math.min(draft.round + 1, draft.totalRounds)} / ${draft.totalRounds}`;
+  $('draft-team-abbr').textContent = t ? t.abbreviation : '—';
+  $('draft-vs').textContent = t ? `vs ${t.opponent}` : '';
+  const rr = $('btn-reroll');
+  rr.textContent = `Reroll (${draft.rerollsLeft})`;
+  rr.disabled = !draft.rerollsLeft;
 
-  // player board — all rolled-team batters; ineligible (positions filled) greyed out
-  const roster = t ? [...t.players] : [];
-  roster.sort((a, b) => {
-    const ea = draft.isEligible(a), eb = draft.isEligible(b);
-    if (ea !== eb) return ea ? -1 : 1;         // eligible first
-    return b.value - a.value;                  // then by night value
-  });
-  $('draft-board').innerHTML = roster.map(p => {
-    const open = draft.openPositionsFor(p);
-    const eligible = open.length > 0;
-    const hot = p.value >= 4 ? 'hot' : '';
-    const posLabel = (eligible ? open : p.positions).join('/');
-    return `<button class="player-card ${eligible ? '' : 'disabled'}" data-id="${p.id}" ${eligible ? '' : 'disabled'}>
-      <span class="pc-pos">${posLabel}</span>
-      <span class="pc-name">${p.name}</span>
-      <span class="pc-team">${p.teamAbbr} vs ${t.opponent}${eligible ? '' : ' · position filled'}</span>
-      <span class="pc-line ${hot}">${p.line.summary}</span>
-      <span class="pc-season">Season: ${p.season.avg} avg · ${p.season.hr} HR · ${p.season.ops} OPS</span>
-    </button>`;
+  // position coverage chips
+  $('position-tracker').innerHTML = REQUIRED_POSITIONS.map(pos => {
+    const f = draft.slots.find(s => s && s.position === pos);
+    return `<span class="pos-chip ${f ? 'filled' : ''}">${pos}${f ? `<span class="pos-fill">${lastName(f.name)}</span>` : ''}</span>`;
   }).join('');
 
-  // mini lineup
-  $('draft-lineup-mini').innerHTML = draft.slots.map((s, i) =>
-    `<span class="mini-slot ${s ? 'set' : ''}">${i + 1}. ${s ? s.position : '—'}</span>`).join('');
+  // filter chips + sort
+  $('draft-filters').innerHTML = FILTERS.map(f =>
+    `<button class="fchip ${draftFilter === f ? 'active' : ''}" data-f="${f}">${f}</button>`).join('');
+  $('draft-sort').value = draftSort;
+
+  renderBoard();
+  renderTray();
+  updateInstr();
 }
 
-$('draft-board').addEventListener('click', e => {
-  const btn = e.target.closest('.player-card:not([disabled])'); if (!btn) return;
-  const player = draft.currentTeam.players.find(p => p.id === Number(btn.dataset.id)); if (!player) return;
-  const open = draft.openPositionsFor(player);
-  if (open.length > 1) showPositionPicker(player, open);
-  else showSlotPicker(player, open[0]);
-});
+function matchesFilter(p) {
+  if (draftFilter === 'ALL') return true;
+  return p.positions.some(pos => (POS_GROUPS[draftFilter] || []).includes(pos));
+}
 
-function showPositionPicker(player, open) {
+function rowHtml(p) {
+  const open = draft.openPositionsFor(p);
+  const eligible = open.length > 0;
+  const posLabel = (eligible ? open : p.positions).join('/');
+  const selected = sel && sel.playerId === p.id;
+  const seq = seqCodes(p.results).join(' · ') || '—';
+  const s = p.stats;
+  const cols = [['AB', s.ab], ['H', s.h], ['HR', s.hr], ['RBI', s.rbi], ['BB', s.bb], ['TB', s.tb]];
+  const stats = cols.map(([l, v]) =>
+    `<span class="stat"><span class="stat-num ${l === 'HR' && v > 0 ? 'hot' : ''}">${v}</span><span class="stat-lbl">${l}</span></span>`).join('');
+  return `<button class="prow ${eligible ? '' : 'disabled'} ${selected ? 'selected' : ''}" data-id="${p.id}" ${eligible ? '' : 'disabled'}>
+    <span class="prow-badge">${posLabel}</span>
+    <span class="prow-id">
+      <span class="prow-name">${p.name}</span>
+      <span class="prow-sub">${p.teamAbbr} · ${p.line.summary} · ${seq}</span>
+    </span>
+    <span class="prow-stats">${stats}</span>
+  </button>`;
+}
+
+function renderBoard() {
+  const t = draft.currentTeam;
+  const players = (t ? t.players : []).filter(matchesFilter);
+  const board = $('draft-board');
+  if (draftSort === 'position') {
+    const html = [];
+    for (const pos of REQUIRED_POSITIONS) {
+      const grp = players.filter(p => p.position === pos).sort((a, b) => b.value - a.value);
+      if (!grp.length) continue;
+      html.push(`<div class="grp-header">${pos} <span class="grp-count">· ${grp.length}</span></div>`);
+      html.push(grp.map(rowHtml).join(''));
+    }
+    board.innerHTML = html.join('') || '<div class="prow-sub" style="padding:10px">No players match.</div>';
+  } else {
+    players.sort((a, b) => {
+      const ea = draft.isEligible(a), eb = draft.isEligible(b);
+      if (ea !== eb) return ea ? -1 : 1;
+      if (draftSort === 'name') return a.name.localeCompare(b.name);
+      return b.value - a.value;
+    });
+    board.innerHTML = players.map(rowHtml).join('') || '<div class="prow-sub" style="padding:10px">No players match.</div>';
+  }
+}
+
+function renderTray() {
+  const armed = !!sel;
+  $('draft-tray').innerHTML = draft.slots.map((s, i) => {
+    if (s) return `<div class="tray-slot filled"><span class="ts-num">${i + 1}</span><span class="ts-pos">${s.position}</span><span class="ts-name">${lastName(s.name)}</span></div>`;
+    return `<div class="tray-slot open ${armed ? 'armed' : ''}" data-slot="${i}"><span class="ts-num">${i + 1}</span><span class="ts-empty">open</span></div>`;
+  }).join('');
+}
+
+function updateInstr() {
+  const el = $('draft-instr');
+  if (sel) {
+    const p = draft.currentTeam.players.find(x => x.id === sel.playerId);
+    el.textContent = `Tap an open slot to bat ${p ? p.name : ''} (${sel.position})`;
+    el.classList.add('armed');
+  } else {
+    el.textContent = 'Select a player, then tap an open lineup slot.';
+    el.classList.remove('armed');
+  }
+}
+
+// Select a player (arm the tray). Multi-position players choose a spot first.
+function selectPlayer(p) {
+  if (sel && sel.playerId === p.id) { sel = null; renderDraft(); return; } // toggle off
+  const open = draft.openPositionsFor(p);
+  if (open.length > 1) {
+    showPositionPicker(p, open, pos => { sel = { playerId: p.id, position: pos }; renderDraft(); });
+  } else {
+    sel = { playerId: p.id, position: open[0] };
+    renderDraft();
+  }
+}
+
+function showPositionPicker(player, open, onChoose) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `
     <div class="modal-box">
       <div class="modal-title">${player.name} played multiple spots</div>
       <div class="modal-subtitle">Which position should they fill?</div>
-      <div class="slot-grid">${open.map(pos =>
-        `<button class="slot-btn" data-pos="${pos}"><span class="slot-num">${pos}</span></button>`).join('')}</div>
+      <div class="slot-grid">${open.map(pos => `<button class="slot-btn" data-pos="${pos}"><span class="slot-num">${pos}</span></button>`).join('')}</div>
       <div class="modal-actions"><button class="btn-secondary" id="pos-cancel">Cancel</button></div>
     </div>`;
   modal.querySelectorAll('.slot-btn').forEach(b =>
-    b.addEventListener('click', () => { modal.remove(); showSlotPicker(player, b.dataset.pos); }));
+    b.addEventListener('click', () => { modal.remove(); onChoose(b.dataset.pos); }));
   modal.querySelector('#pos-cancel').addEventListener('click', () => modal.remove());
   $('app').appendChild(modal);
 }
 
-$('draft-rolled').addEventListener('click', e => {
-  if (!e.target.closest('#btn-reroll')) return;
-  const r = draft.reroll();
-  if (r.ok) renderDraft();
-});
-
-function showSlotPicker(player, chosenPosition) {
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  const slotBtns = draft.slots.map((s, i) => `
-    <button class="slot-btn" data-slot="${i}" ${s ? 'disabled' : ''}>
-      <span class="slot-num">${i + 1}</span>
-      <span class="slot-occ">${s ? s.position : 'open'}</span>
-    </button>`).join('');
-  modal.innerHTML = `
-    <div class="modal-box">
-      <div class="modal-title">Bat ${player.name} where?</div>
-      <div class="modal-subtitle">${chosenPosition} · ${player.teamAbbr} · ${player.line.summary}</div>
-      <div class="slot-grid">${slotBtns}</div>
-      <div class="modal-actions"><button class="btn-secondary" id="slot-cancel">Cancel</button></div>
-    </div>`;
-  modal.querySelectorAll('.slot-btn:not([disabled])').forEach(b =>
-    b.addEventListener('click', () => {
-      const slotIdx = Number(b.dataset.slot);
-      const r = draft.pick(player.id, slotIdx, chosenPosition);
-      modal.remove();
-      if (!r.ok) return;
-      if (r.done) { renderLineupReview(); show('lineup'); }
-      else { draft.rollTeam(); renderDraft(); }
-    }));
-  modal.querySelector('#slot-cancel').addEventListener('click', () => modal.remove());
-  $('app').appendChild(modal);
+function placeInSlot(slotIndex) {
+  if (!sel) return;
+  const r = draft.pick(sel.playerId, slotIndex, sel.position);
+  if (!r.ok) return;
+  sel = null;
+  if (r.done) { renderLineupReview(); show('lineup'); }
+  else { draft.rollTeam(); renderDraft(); }
 }
+
+// ── Draft event wiring (delegated on static containers) ───────────────────────
+$('draft-board').addEventListener('click', e => {
+  const row = e.target.closest('.prow:not([disabled])'); if (!row) return;
+  const player = draft.currentTeam.players.find(p => p.id === Number(row.dataset.id));
+  if (player) selectPlayer(player);
+});
+$('draft-tray').addEventListener('click', e => {
+  const slot = e.target.closest('.tray-slot.open.armed'); if (!slot) return;
+  placeInSlot(Number(slot.dataset.slot));
+});
+$('draft-filters').addEventListener('click', e => {
+  const chip = e.target.closest('.fchip'); if (!chip) return;
+  draftFilter = chip.dataset.f; renderDraft();
+});
+$('draft-sort').addEventListener('change', e => { draftSort = e.target.value; renderBoard(); });
+$('btn-reroll').addEventListener('click', () => { const r = draft.reroll(); if (r.ok) { sel = null; renderDraft(); } });
 
 $('btn-start-draft').addEventListener('click', startDraft);
 $('btn-draft-home').addEventListener('click', () => show('home'));
@@ -210,8 +261,35 @@ function startGameday() {
   $('gd-ticker').innerHTML = '';
   renderScoreboard([], 0);
   $('btn-gd-speed').textContent = '▶ 1×';
+  renderGdLineup(0);
   show('gameday');
   scheduleNext();
+}
+
+// Live lineup panel: each batter's day sequence + ABs used, current batter hilit
+function renderGdLineup(uptoIndex) {
+  const log = gdState.res.log;
+  const lastSlot = uptoIndex > 0 ? log[uptoIndex - 1].slot : 0;
+  const used = Array(9).fill(0);
+  for (let k = 0; k < uptoIndex; k++) used[log[k].slot - 1]++;
+  $('gd-lineup').innerHTML = gdState.lineup.map((p, idx) => {
+    const codes = seqCodes(p.results);
+    const u = used[idx], total = codes.length;
+    const seq = codes.map((c, j) => {
+      const hit = ['1B', '2B', '3B', 'HR'].includes(c);
+      const cls = j < u ? `played${hit ? ' hit' : ''}` : j === u ? 'next' : '';
+      return `<span class="gdl-code ${cls}">${c}</span>`;
+    }).join('');
+    const batting = (idx + 1) === lastSlot;
+    const done = u >= total;
+    return `<div class="gdl-row ${batting ? 'batting' : ''} ${done && !batting ? 'done' : ''}">
+      <span class="gdl-slot">${idx + 1}</span>
+      <span class="gdl-pos">${p.position}</span>
+      <span class="gdl-name">${p.name}</span>
+      <span class="gdl-seq">${seq}</span>
+      <span class="gdl-abs"><span class="${u < total ? 'abs-hot' : ''}">${u}/${total}</span> ABs</span>
+    </div>`;
+  }).join('');
 }
 
 const SPEED_MS = { 1: 900, 2: 450, 4: 200 };
@@ -231,6 +309,7 @@ function stepGameday() {
   const verb = RESULT_VERB[e.result] ?? e.result;
   const runTxt = e.runsScored ? `  +${e.runsScored} run${e.runsScored > 1 ? 's' : ''}` : '';
   addTicker(`${e.player} ${verb}${runTxt}`, e.runsScored ? 'run' : (isHitResult(e.result) ? 'hit' : ''));
+  renderGdLineup(gdState.i);
   scheduleNext();
 }
 
