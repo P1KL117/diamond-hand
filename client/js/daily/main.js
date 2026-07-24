@@ -52,19 +52,11 @@ function show(name) {
 async function boot() {
   $('home-date').textContent = 'Loading last night\'s games…';
   try {
-    // Use the requested date; if it has no final games (early in the day / off-day),
-    // walk back to the most recent real slate rather than jumping to a random game.
-    pool = await fetchDailyPool(GAME_DATE);
-    activeDate = GAME_DATE;
-    if (!pool.teams.length && !EXPLICIT_DATE) {
-      let d = GAME_DATE;
-      for (let i = 0; i < 14 && !pool.teams.length; i++) {
-        d = offsetDate(d, -1);
-        pool = await fetchDailyPool(d);
-        if (pool.teams.length) activeDate = d;
-      }
-    }
-    if (!pool.teams.length) { pool = await fetchDailyPool(FALLBACK_DATE); activeDate = FALLBACK_DATE; }
+    // The server resolves the current daily (yesterday's games, 5am ET rollover,
+    // walked back to the most recent complete slate). ?date= overrides for testing.
+    pool = await fetchDailyPool(EXPLICIT_DATE || undefined);
+    activeDate = pool.date;
+    if (!pool.teams.length) { pool = await fetchDailyPool(FALLBACK_DATE); activeDate = pool.date; }
   } catch (e) {
     $('home-date').textContent = `Failed to load: ${e.message}`;
     return;
@@ -565,9 +557,26 @@ async function submitScore(date, sty, initials, runs, mvp) {
     }).then(r => r.json());
   } catch { return { enabled: false }; }
 }
-const subKey = (d, s) => `dh-submitted-${d}-${s}`;
-const hasSubmitted = (d, s) => localStorage.getItem(subKey(d, s));
-const markSubmitted = (d, s, ini) => localStorage.setItem(subKey(d, s), ini);
+// Submit guard keyed by the server "reset generation" — an admin reset bumps
+// the generation, which invalidates these keys so nobody is locked out.
+const subKey = (gen, d, s) => `dh-sub-${gen}-${d}-${s}`;
+const hasSubmitted = (gen, d, s) => localStorage.getItem(subKey(gen, d, s));
+const markSubmitted = (gen, d, s, ini) => localStorage.setItem(subKey(gen, d, s), ini);
+
+// Structured MVP payload stored on the leaderboard (JSON in the mvp text column)
+function mvpPayload(res, lineup) {
+  const m = res.mvp; if (!m) return '';
+  const p = lineup.find(x => x.id === m.id);
+  return JSON.stringify({ n: m.name, p: m.position, r: m.R, rbi: m.RBI, real: p?.line?.summary ?? '' });
+}
+function mvpCell(raw) {
+  if (!raw) return '<td class="lb-mvp"></td>';
+  let m; try { m = JSON.parse(raw); } catch { return `<td class="lb-mvp">${raw}</td>`; }
+  return `<td class="lb-mvp">
+    <div class="lb-mvp-name">${m.n} <span class="lb-mvp-pos">${m.p}</span></div>
+    <div class="lb-mvp-det">${m.rbi} RBI · ${m.r} R${m.real ? ` <span class="lb-mvp-real">· real ${m.real}</span>` : ''}</div>
+  </td>`;
+}
 
 function boardTable(scores, myInitials) {
   if (!scores.length) return '<div class="lb-empty">No scores yet — be the first!</div>';
@@ -578,7 +587,7 @@ function boardTable(scores, myInitials) {
     </tr></thead>
     <tbody>${scores.map((s, i) => {
     const me = myInitials && s.initials === myInitials ? 'me' : '';
-    return `<tr class="${me}"><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-mvp">${s.mvp ?? ''}</td></tr>`;
+    return `<tr class="${me}"><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td>${mvpCell(s.mvp)}</tr>`;
   }).join('')}</tbody></table>`;
 }
 
@@ -589,10 +598,11 @@ async function renderResultLeaderboard() {
   el.innerHTML = '<div class="lb-note">Loading leaderboard…</div>';
   const data = await fetchLeaderboard(date, sty);
   if (!data.enabled) { el.innerHTML = '<div class="lb-note">Leaderboard coming soon.</div>'; return; }
+  const gen = data.gen ?? 0;
 
   const title = `<div class="lb-title">DAILY LEADERBOARD · ${sty.toUpperCase()}</div>`;
-  if (hasSubmitted(date, sty)) {
-    el.innerHTML = title + boardTable(data.scores, hasSubmitted(date, sty));
+  if (hasSubmitted(gen, date, sty)) {
+    el.innerHTML = title + boardTable(data.scores, hasSubmitted(gen, date, sty));
     return;
   }
   el.innerHTML = `${title}
@@ -610,9 +620,9 @@ async function renderResultLeaderboard() {
     const ini = input.value.slice(0, 3);
     if (!ini) { input.focus(); return; }
     $('lb-submit-btn').disabled = true;
-    const out = await submitScore(date, sty, ini, res.runs, res.mvp?.name ?? '');
+    const out = await submitScore(date, sty, ini, res.runs, mvpPayload(res, gdState.lineup));
     if (out.enabled) {
-      markSubmitted(date, sty, ini);
+      markSubmitted(out.gen ?? gen, date, sty, ini);
       el.innerHTML = `${title}<div class="lb-rank-line">You're #${out.rank}!</div>${boardTable(out.scores, ini)}`;
     } else {
       $('lb-submit-btn').disabled = false;

@@ -29,10 +29,21 @@ if (process.env.DATABASE_URL) {
     runs int not null,
     mvp text,
     created_at timestamptz default now()
-  )`).then(() => console.log('Leaderboard DB ready (Postgres)'))
+  )`).then(() => db.query(`CREATE TABLE IF NOT EXISTS meta (key text primary key, val int)`))
+    .then(() => db.query(`INSERT INTO meta (key,val) VALUES ('reset_gen',0) ON CONFLICT (key) DO NOTHING`))
+    .then(() => db.query(`SELECT val FROM meta WHERE key='reset_gen'`))
+    .then(({ rows }) => { resetGen = rows[0]?.val ?? 0; console.log('Leaderboard DB ready (Postgres), gen', resetGen); })
     .catch(e => { console.error('DB init failed:', e.message); db = null; });
 } else {
   console.log('No DATABASE_URL — using in-memory leaderboard (ephemeral, local dev)');
+}
+
+// Reset generation: bumped on every admin reset so that clients' one-per-day
+// submit guards (keyed by gen) are invalidated and nobody is locked out.
+let resetGen = 0;
+async function bumpGen() {
+  resetGen++;
+  if (db) await db.query(`UPDATE meta SET val=$1 WHERE key='reset_gen'`, [resetGen]);
 }
 
 async function boardTop(date, style) {
@@ -70,7 +81,7 @@ app.get('/api/leaderboard', async (req, res) => {
   try {
     const { date, style } = req.query;
     if (!date || !STYLES.has(style)) return res.status(400).json({ error: 'date and valid style required' });
-    res.json({ enabled: true, scores: await boardTop(date, style) });
+    res.json({ enabled: true, gen: resetGen, scores: await boardTop(date, style) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -83,8 +94,35 @@ app.post('/api/leaderboard', async (req, res) => {
     const r = Number(runs);
     if (!date || !STYLES.has(style) || !ini || !Number.isInteger(r) || r < 0 || r > 200)
       return res.status(400).json({ error: 'invalid submission' });
-    await boardInsert({ date, style, initials: ini, runs: r, mvp: String(mvp ?? '').slice(0, 40) });
-    res.json({ enabled: true, scores: await boardTop(date, style), rank: await boardRank(date, style, r) });
+    // Only the currently-active daily accepts new scores — old dailies are frozen.
+    // (Enforced in production; dev/in-memory stays permissive for testing.)
+    if (db && date !== currentDailyDate && date !== baseDailyDate())
+      return res.status(403).json({ error: 'submissions closed for this date' });
+    await boardInsert({ date, style, initials: ini, runs: r, mvp: String(mvp ?? '').slice(0, 200) });
+    res.json({ enabled: true, gen: resetGen, scores: await boardTop(date, style), rank: await boardRank(date, style, r) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: clear leaderboard scores. Protected by the ADMIN_SECRET env var.
+// POST /api/admin/reset?secret=XXX   body: {} | {date} | {date,style}
+app.post('/api/admin/reset', async (req, res) => {
+  const secret = req.query.secret || req.headers['x-admin-secret'];
+  if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET)
+    return res.status(403).json({ error: 'forbidden' });
+  const { date, style } = req.body ?? {};
+  try {
+    if (db) {
+      if (date && style) await db.query('DELETE FROM scores WHERE date=$1 AND style=$2', [date, style]);
+      else if (date) await db.query('DELETE FROM scores WHERE date=$1', [date]);
+      else await db.query('DELETE FROM scores');
+    } else {
+      const keep = memScores.filter(s => !((!date || s.date === date) && (!style || s.style === style)));
+      memScores.length = 0; memScores.push(...keep);
+    }
+    await bumpGen(); // frees everyone's submit guard so nobody is locked out post-reset
+    res.json({ ok: true, gen: resetGen, scope: date ? (style ? `${date}/${style}` : date) : 'all' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -118,6 +156,41 @@ app.get('/api/game/:gamePk/feed', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── Daily date resolution (server-authoritative, shared by all players) ───────
+// The daily uses yesterday's games and rolls to a new day at 5:00 AM US Eastern.
+function etNow() {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false });
+  const p = Object.fromEntries(fmt.formatToParts(new Date()).map(x => [x.type, x.value]));
+  return { y: +p.year, m: +p.month, d: +p.day, h: +(p.hour === '24' ? 0 : p.hour) };
+}
+function baseDailyDate() {
+  const { y, m, d, h } = etNow();
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  if (h < 5) dt.setUTCDate(dt.getUTCDate() - 1); // before 5am ET → previous day
+  dt.setUTCDate(dt.getUTCDate() - 1);            // daily = yesterday's games
+  return dt.toISOString().slice(0, 10);
+}
+async function slateComplete(date) {
+  try {
+    const sched = await fetch(`${MLB}/api/v1/schedule?sportId=1&date=${date}`).then(r => r.json());
+    const games = sched.dates?.[0]?.games ?? [];
+    const playable = games.filter(g => !['Postponed', 'Cancelled'].includes(g.status?.detailedState));
+    const final = playable.filter(g => g.status?.abstractGameState === 'Final');
+    return playable.length > 0 && final.length === playable.length;
+  } catch { return false; }
+}
+let currentDailyDate = baseDailyDate();
+async function resolveDailyDate() {
+  let d = baseDailyDate();
+  for (let i = 0; i < 10; i++) {
+    if (await slateComplete(d)) { currentDailyDate = d; return d; }
+    const dt = new Date(d + 'T12:00:00Z'); dt.setUTCDate(dt.getUTCDate() - 1); d = dt.toISOString().slice(0, 10);
+  }
+  currentDailyDate = baseDailyDate();
+  return currentDailyDate;
+}
 
 // ── Daily Lineup pool: all players who batted on a date, grouped by team ──────
 // Returns each team's batters with their ordered plate-appearance outcomes,
@@ -192,8 +265,9 @@ function extractTeamPools(feed) {
 
 app.get('/api/daily', async (req, res) => {
   try {
-    const { date } = req.query;
-    if (!date) return res.status(400).json({ error: 'date required' });
+    // No date → the server-resolved current daily (yesterday's games, 5am ET rollover,
+    // walked back to the most recent fully-complete slate).
+    const date = req.query.date || await resolveDailyDate();
     if (dailyPoolCache.has(date)) return res.json(dailyPoolCache.get(date));
 
     const schedUrl = `${MLB}/api/v1/schedule?sportId=1&date=${date}`;

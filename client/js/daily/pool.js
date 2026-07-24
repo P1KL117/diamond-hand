@@ -28,7 +28,8 @@ function nightStats(results, pas) {
 // Only players at a standard defensive position are offered (keeps the positional
 // draft clean and dead-end-free).
 export async function fetchDailyPool(date) {
-  const raw = await fetch(`/api/daily?date=${date}`).then(r => r.json());
+  // No date → the server resolves the current daily (yesterday's games, 5am ET rollover).
+  const raw = await fetch(`/api/daily${date ? `?date=${date}` : ''}`).then(r => r.json());
   if (raw.error) throw new Error(raw.error);
 
   const teams = (raw.teams ?? []).map(t => ({

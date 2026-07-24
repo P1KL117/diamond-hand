@@ -294,15 +294,19 @@
 .lb-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
 .lb-table th {
   font-family: var(--font-display); font-size: .58rem; letter-spacing: 1px; color: var(--muted);
-  font-weight: 700; text-align: left; padding: 2px 8px 5px; border-bottom: 1px solid var(--border2);
+  font-weight: 700; text-align: center; padding: 2px 8px 5px; border-bottom: 1px solid var(--border2);
 }
-.lb-table th.lb-runs { text-align: center; }
-.lb-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.lb-table th.lb-ini, .lb-table th.lb-mvp { text-align: left; }
+.lb-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .lb-table tr.me td { background: rgba(232,160,32,.12); }
 .lb-rank { font-family: var(--font-display); font-weight: 700; color: var(--muted); width: 28px; text-align: center; }
 .lb-ini { font-family: var(--font-display); font-weight: 800; letter-spacing: 2px; color: var(--text); width: 54px; }
-.lb-runs { font-family: var(--font-display); font-weight: 800; color: var(--gold2); width: 44px; text-align: center; }
-.lb-mvp { color: var(--muted); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+.lb-runs { font-family: var(--font-display); font-weight: 800; color: var(--gold2); width: 44px; text-align: center; font-size: 1rem; }
+.lb-mvp { color: var(--text); }
+.lb-mvp-name { font-weight: 600; font-size: .82rem; white-space: nowrap; }
+.lb-mvp-pos { font-family: var(--font-display); font-weight: 700; color: var(--muted2); font-size: .68rem; margin-left: 3px; }
+.lb-mvp-det { font-size: .68rem; color: var(--gold2); font-weight: 600; }
+.lb-mvp-real { color: var(--muted); font-weight: 500; }
 
 /* Reused linescore for one team */
 .gd-scoreboard .sb-table td, .gd-scoreboard .sb-table th { font-size: .72rem; }
