@@ -207,30 +207,26 @@
 /* Live lineup panel */
 .ticker-entry.exhausted { color: var(--muted); font-style: italic; }
 .gd-lineup-title { font-family: var(--font-display); font-size: .74rem; font-weight: 700; letter-spacing: 2px; color: var(--muted); flex-shrink: 0; }
-.gd-lineup { display: flex; flex-direction: column; gap: 5px; }
-/* Rows fill the column; content scales with viewport height so tall rows stay
-   proportional instead of looking empty. Capped so it never gets cartoonish. */
+.gd-lineup { display: flex; flex-direction: column; gap: 4px; }
 .gdl-row {
-  display: flex; align-items: center; gap: clamp(8px, 1vh, 14px); border-radius: 8px;
-  background: var(--surface2); border: 1px solid var(--border);
-  flex: 1 1 0; min-height: 44px;
-  padding: clamp(6px, 1.2vh, 18px) clamp(10px, 1.4vw, 16px);
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px;
+  background: var(--surface2); border: 1px solid var(--border); font-size: .82rem;
+  flex: 0 0 auto; /* natural height — no stretching */
 }
 .gdl-row.batting { border-color: var(--gold2); background: rgba(232,160,32,.12); }
 .gdl-row.done { opacity: .5; }
-.gdl-slot { font-family: var(--font-display); font-weight: 900; color: var(--gold2); width: clamp(18px, 2.4vh, 30px); text-align: center; font-size: clamp(.95rem, 2.2vh, 1.7rem); }
-.gdl-pos { font-family: var(--font-display); font-weight: 700; color: var(--muted2); width: clamp(28px, 3.4vh, 42px); font-size: clamp(.72rem, 1.5vh, 1.1rem); }
-.gdl-name { font-weight: 600; min-width: 108px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(.88rem, 1.9vh, 1.5rem); }
-.gdl-seq { display: flex; gap: clamp(3px, .6vh, 7px); flex: 1; flex-wrap: wrap; }
+.gdl-slot { font-family: var(--font-display); font-weight: 900; color: var(--gold2); width: 18px; text-align: center; font-size: 1.05rem; }
+.gdl-pos { font-family: var(--font-display); font-weight: 700; color: var(--muted2); width: 28px; font-size: .72rem; }
+.gdl-name { font-weight: 600; min-width: 108px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .9rem; }
+.gdl-seq { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
 .gdl-code {
-  font-family: var(--font-display); font-size: clamp(.72rem, 1.6vh, 1.25rem); font-weight: 700;
-  padding: clamp(2px, .5vh, 6px) clamp(6px, 1vw, 12px);
+  font-family: var(--font-display); font-size: .72rem; font-weight: 700; padding: 2px 6px;
   border-radius: 4px; background: var(--surface3); color: var(--muted); border: 1px solid var(--border);
 }
 .gdl-code.played { background: var(--surface); color: var(--muted2); opacity: .5; text-decoration: line-through; }
 .gdl-code.played.hit { color: var(--green); border-color: rgba(24,207,110,.4); opacity: .8; text-decoration: none; }
 .gdl-code.next { border-color: var(--gold2); color: var(--gold2); }
-.gdl-abs { font-size: clamp(.68rem, 2.5cqh, .92rem); color: var(--muted); white-space: nowrap; font-weight: 600; }
+.gdl-abs { font-size: .68rem; color: var(--muted); white-space: nowrap; font-weight: 600; }
 .gdl-abs .abs-hot { color: var(--gold2); }
 
 /* ── RESULT ───────────────────────────────────────────────────────────────── */
