@@ -567,14 +567,17 @@ const markSubmitted = (gen, d, s, ini) => localStorage.setItem(subKey(gen, d, s)
 function mvpPayload(res, lineup) {
   const m = res.mvp; if (!m) return '';
   const p = lineup.find(x => x.id === m.id);
-  return JSON.stringify({ n: m.name, p: m.position, r: m.R, rbi: m.RBI, real: p?.line?.summary ?? '' });
+  return JSON.stringify({ n: m.name, p: m.position, r: m.R, rbi: m.RBI, rr: p?.real?.r ?? 0, rrbi: p?.real?.rbi ?? 0 });
 }
 function mvpCell(raw) {
   if (!raw) return '<td class="lb-mvp"></td>';
   let m; try { m = JSON.parse(raw); } catch { return `<td class="lb-mvp">${raw}</td>`; }
+  const real = m.rr !== undefined
+    ? `real ${m.rrbi} RBI · ${m.rr} R`
+    : (m.real ? `real ${m.real}` : '');
   return `<td class="lb-mvp">
     <div class="lb-mvp-name">${m.n} <span class="lb-mvp-pos">${m.p}</span></div>
-    <div class="lb-mvp-det">${m.rbi} RBI · ${m.r} R${m.real ? ` <span class="lb-mvp-real">· real ${m.real}</span>` : ''}</div>
+    <div class="lb-mvp-det">this game <b>${m.rbi} RBI · ${m.r} R</b>${real ? ` <span class="lb-mvp-real">· ${real}</span>` : ''}</div>
   </td>`;
 }
 
