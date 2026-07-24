@@ -182,21 +182,20 @@ function rowHtml(p) {
        <span class="pstat"><b>${s.rbi}</b><i>RBI</i></span>
        <span class="pstat"><b>${s.tb}</b><i>TB</i></span>`;
 
-  // Second line: the day sequence as prominent chips (hidden in blind mode).
-  const seqLine = blind
-    ? `<div class="prow-seq blind">last night hidden — reveal at game time</div>`
-    : `<div class="prow-seq">${seqChips(seqCodes(p.results))}</div>`;
+  // Day sequence chips fill the middle of the row (hidden in blind mode).
+  const seqMid = blind
+    ? `<span class="prow-seq blind">hidden — reveal at game time</span>`
+    : `<span class="prow-seq">${seqChips(seqCodes(p.results))}</span>`;
 
+  // One player per row, spanning the full width: badge · identity · sequence · stats
   return `<button class="prow ${eligible ? '' : 'disabled'} ${selected ? 'selected' : ''}" data-id="${p.id}" ${eligible ? '' : 'disabled'}>
-    <div class="prow-top">
-      <span class="prow-badge">${posLabel}</span>
-      <span class="prow-id">
-        <span class="prow-name">${p.name}</span>
-        <span class="prow-sub">${p.teamAbbr} · vs ${draft.currentTeam?.opponent ?? ''}</span>
-      </span>
-      <span class="prow-stats">${statCluster}</span>
-    </div>
-    ${seqLine}
+    <span class="prow-badge">${posLabel}</span>
+    <span class="prow-id">
+      <span class="prow-name">${p.name}</span>
+      <span class="prow-sub">${p.teamAbbr} · vs ${draft.currentTeam?.opponent ?? ''}</span>
+    </span>
+    ${seqMid}
+    <span class="prow-stats">${statCluster}</span>
   </button>`;
 }
 
@@ -476,7 +475,8 @@ function addTicker(text, type = '') {
   el.className = `ticker-entry${type ? ' ' + type : ''}`;
   el.textContent = text;
   log.prepend(el);
-  while (log.children.length > 30) log.lastChild.remove();
+  // keep the whole game so the player can scroll back through every at-bat
+  while (log.children.length > 300) log.lastChild.remove();
 }
 
 function renderScoreboard(inningRuns, total) {
@@ -502,14 +502,18 @@ function renderResult(res, lineup) {
       <tbody><tr><td class="sb-team-col">YOU</td>${cells}<td class="sb-r">${res.runs}</td></tr></tbody>
     </table>`;
 
-  // MVP banner
+  // MVP banner — this-game line + their real game line
   const mvp = res.mvp;
   const mvpPlayer = lineup.find(p => p.id === mvp?.id);
   $('result-mvp').innerHTML = mvp ? `
     <div class="mvp-card">
       <div class="mvp-tag">★ GAME MVP</div>
       <div class="mvp-name">${mvp.name}</div>
-      <div class="mvp-line">${mvpPlayer?.teamAbbr ?? ''} ${mvp.position} · ${mvp.RBI} RBI · ${mvp.R} R</div>
+      <div class="mvp-sub">${mvpPlayer?.teamAbbr ?? ''} · ${mvp.position}</div>
+      <div class="mvp-stats">
+        <div class="mvp-stat"><span class="mvp-stat-lbl">This game</span><span class="mvp-stat-val">${mvp.R} R · ${mvp.RBI} RBI</span></div>
+        <div class="mvp-stat"><span class="mvp-stat-lbl">Real life</span><span class="mvp-stat-val">${mvpPlayer?.real?.r ?? 0} R · ${mvpPlayer?.real?.rbi ?? 0} RBI</span></div>
+      </div>
     </div>` : '';
 
   // box score: this sim game's AB/R/H/RBI per player + their real day line
@@ -567,7 +571,12 @@ const markSubmitted = (d, s, ini) => localStorage.setItem(subKey(d, s), ini);
 
 function boardTable(scores, myInitials) {
   if (!scores.length) return '<div class="lb-empty">No scores yet — be the first!</div>';
-  return `<table class="lb-table"><tbody>${scores.map((s, i) => {
+  return `<table class="lb-table">
+    <thead><tr>
+      <th class="lb-rank">#</th><th class="lb-ini">WHO</th>
+      <th class="lb-runs">RUNS</th><th class="lb-mvp">GAME MVP</th>
+    </tr></thead>
+    <tbody>${scores.map((s, i) => {
     const me = myInitials && s.initials === myInitials ? 'me' : '';
     return `<tr class="${me}"><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-mvp">${s.mvp ?? ''}</td></tr>`;
   }).join('')}</tbody></table>`;
@@ -594,7 +603,9 @@ async function renderResultLeaderboard() {
     </div>
     ${boardTable(data.scores)}`;
   const input = $('lb-initials');
+  input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') $('lb-submit-btn').click(); });
   $('lb-submit-btn').addEventListener('click', async () => {
     const ini = input.value.slice(0, 3);
     if (!ini) { input.focus(); return; }
@@ -609,16 +620,16 @@ async function renderResultLeaderboard() {
   });
 }
 
-// Home peek: today's top few for the selected daily style
+// Home peek: today's top scores for the selected daily style (always shown for Daily)
 async function renderHomeLeaderboard() {
   const el = $('home-leaderboard');
   if (!el) return;
   if (cadence !== 'daily') { el.innerHTML = ''; return; }
   const reqDate = activeDate, reqStyle = style;
+  el.innerHTML = `<div class="lb-title">TODAY'S TOP · ${reqStyle.toUpperCase()}</div><div class="lb-note">loading…</div>`;
   const data = await fetchLeaderboard(reqDate, reqStyle);
-  // ignore if the user changed selection while fetching
-  if (reqDate !== activeDate || reqStyle !== style || cadence !== 'daily') return;
-  if (!data.enabled || !data.scores.length) { el.innerHTML = ''; return; }
+  if (reqDate !== activeDate || reqStyle !== style || cadence !== 'daily') return; // selection changed
+  if (!data.enabled) { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="lb-title">TODAY'S TOP · ${reqStyle.toUpperCase()}</div>${boardTable(data.scores.slice(0, 5))}`;
 }
 

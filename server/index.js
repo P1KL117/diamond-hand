@@ -163,6 +163,7 @@ function extractTeamPools(feed) {
       const pas = id ? pasByBatter.get(id) : null;
       if (!pas || !pas.length) continue; // only players who actually batted
       const bat = p.seasonStats?.batting ?? {};
+      const g = p.stats?.batting ?? {}; // that night's actual box-score line
       const allPos = (p.allPositions ?? []).map(x => x.abbreviation).filter(Boolean);
       out.push({
         id,
@@ -176,6 +177,7 @@ function extractTeamPools(feed) {
           avg: bat.avg ?? '—', hr: bat.homeRuns ?? 0, rbi: bat.rbi ?? 0,
           ops: bat.ops ?? '—', sb: bat.stolenBases ?? 0,
         },
+        real: { r: g.runs ?? 0, rbi: g.rbi ?? 0, h: g.hits ?? 0, ab: g.atBats ?? 0, hr: g.homeRuns ?? 0 },
         pas,
       });
     }
@@ -196,10 +198,15 @@ app.get('/api/daily', async (req, res) => {
 
     const schedUrl = `${MLB}/api/v1/schedule?sportId=1&date=${date}`;
     const sched = await fetch(schedUrl).then(r => r.json());
-    const games = (sched.dates?.[0]?.games ?? [])
-      .filter(g => g.status?.abstractGameState === 'Final');
+    const allGames = sched.dates?.[0]?.games ?? [];
+    const playable = allGames.filter(g => !['Postponed', 'Cancelled'].includes(g.status?.detailedState));
+    const finalGames = playable.filter(g => g.status?.abstractGameState === 'Final');
+    // The slate is "complete" only when every playable game is final — used to
+    // decide when a new daily can begin. The team order is stable (sorted by id)
+    // so the seeded daily draft is identical for everyone and survives resets.
+    const complete = playable.length > 0 && finalGames.length === playable.length;
 
-    const feeds = await Promise.all(games.map(g =>
+    const feeds = await Promise.all(finalGames.map(g =>
       fetch(`${MLB}/api/v1.1/game/${g.gamePk}/feed/live`)
         .then(r => r.json())
         .catch(() => null)
@@ -212,9 +219,10 @@ app.get('/api/daily', async (req, res) => {
         if (team.players.length) teams.push(team);
       }
     }
+    teams.sort((a, b) => (a.id ?? 0) - (b.id ?? 0)); // stable, deterministic order
 
-    const pool = { date, teamCount: teams.length, teams };
-    dailyPoolCache.set(date, pool);
+    const pool = { date, complete, teamCount: teams.length, teams };
+    if (complete) dailyPoolCache.set(date, pool); // only cache a finished slate
     res.json(pool);
   } catch (e) {
     res.status(500).json({ error: e.message });

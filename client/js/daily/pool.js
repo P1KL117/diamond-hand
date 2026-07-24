@@ -46,6 +46,7 @@ export async function fetchDailyPool(date) {
           positions: eligPositions,     // all draftable positions
           teamAbbr: t.abbreviation, teamName: t.name,
           season: p.season,
+          real: p.real ?? { r: 0, rbi: 0 },
           pas: p.pas, results,
           line: battingLine(p.pas),
           hits: results.filter(isHit).length,
