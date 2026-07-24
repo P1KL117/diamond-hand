@@ -441,6 +441,7 @@ function finishGameday() {
   renderResult(gdState.res, gdState.lineup);
   saveBest(gdState.date, gdState.style, gdState.res.runs);
   show('result');
+  renderResultLeaderboard();
 }
 
 function skipToScore() {
@@ -547,11 +548,78 @@ $('btn-share').addEventListener('click', () => {
   });
 });
 
-// ── Home leaderboard peek (populated in the leaderboard step) ─────────────────
-function renderHomeLeaderboard() {
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+async function fetchLeaderboard(date, sty) {
+  try { return await fetch(`/api/leaderboard?date=${date}&style=${sty}`).then(r => r.json()); }
+  catch { return { enabled: false, scores: [] }; }
+}
+async function submitScore(date, sty, initials, runs, mvp) {
+  try {
+    return await fetch('/api/leaderboard', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, style: sty, initials, runs, mvp }),
+    }).then(r => r.json());
+  } catch { return { enabled: false }; }
+}
+const subKey = (d, s) => `dh-submitted-${d}-${s}`;
+const hasSubmitted = (d, s) => localStorage.getItem(subKey(d, s));
+const markSubmitted = (d, s, ini) => localStorage.setItem(subKey(d, s), ini);
+
+function boardTable(scores, myInitials) {
+  if (!scores.length) return '<div class="lb-empty">No scores yet — be the first!</div>';
+  return `<table class="lb-table"><tbody>${scores.map((s, i) => {
+    const me = myInitials && s.initials === myInitials ? 'me' : '';
+    return `<tr class="${me}"><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-mvp">${s.mvp ?? ''}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+async function renderResultLeaderboard() {
+  const el = $('result-leaderboard');
+  const { cadence: cad, style: sty, date, res } = gdState;
+  if (cad !== 'daily') { el.innerHTML = '<div class="lb-note">Free Play — not ranked. Switch to Daily to compete.</div>'; return; }
+  el.innerHTML = '<div class="lb-note">Loading leaderboard…</div>';
+  const data = await fetchLeaderboard(date, sty);
+  if (!data.enabled) { el.innerHTML = '<div class="lb-note">Leaderboard coming soon.</div>'; return; }
+
+  const title = `<div class="lb-title">DAILY LEADERBOARD · ${sty.toUpperCase()}</div>`;
+  if (hasSubmitted(date, sty)) {
+    el.innerHTML = title + boardTable(data.scores, hasSubmitted(date, sty));
+    return;
+  }
+  el.innerHTML = `${title}
+    <div class="lb-submit">
+      <span>Your <b>${res.runs}</b> runs — enter initials:</span>
+      <input id="lb-initials" maxlength="3" placeholder="AAA" class="lb-input" autocomplete="off">
+      <button id="lb-submit-btn" class="btn-primary">Submit</button>
+    </div>
+    ${boardTable(data.scores)}`;
+  const input = $('lb-initials');
+  input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+  $('lb-submit-btn').addEventListener('click', async () => {
+    const ini = input.value.slice(0, 3);
+    if (!ini) { input.focus(); return; }
+    $('lb-submit-btn').disabled = true;
+    const out = await submitScore(date, sty, ini, res.runs, res.mvp?.name ?? '');
+    if (out.enabled) {
+      markSubmitted(date, sty, ini);
+      el.innerHTML = `${title}<div class="lb-rank-line">You're #${out.rank}!</div>${boardTable(out.scores, ini)}`;
+    } else {
+      $('lb-submit-btn').disabled = false;
+    }
+  });
+}
+
+// Home peek: today's top few for the selected daily style
+async function renderHomeLeaderboard() {
   const el = $('home-leaderboard');
   if (!el) return;
-  el.innerHTML = ''; // wired up with the leaderboard backend
+  if (cadence !== 'daily') { el.innerHTML = ''; return; }
+  const reqDate = activeDate, reqStyle = style;
+  const data = await fetchLeaderboard(reqDate, reqStyle);
+  // ignore if the user changed selection while fetching
+  if (reqDate !== activeDate || reqStyle !== style || cadence !== 'daily') return;
+  if (!data.enabled || !data.scores.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="lb-title">TODAY'S TOP · ${reqStyle.toUpperCase()}</div>${boardTable(data.scores.slice(0, 5))}`;
 }
 
 // ── Best-score persistence (per date + style) ─────────────────────────────────

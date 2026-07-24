@@ -1,15 +1,94 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import pg from 'pg';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const MLB = 'https://statsapi.mlb.com';
+
+// ── Leaderboard storage ───────────────────────────────────────────────────────
+// Railway Postgres in production; an ephemeral in-memory store for local dev
+// (resets on restart). Same API surface either way — always "enabled".
+const STYLES = new Set(['normal', 'blind', 'shuffled']);
+let db = null;
+const memScores = []; // { date, style, initials, runs, mvp, created_at }
+
+if (process.env.DATABASE_URL) {
+  db = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false },
+  });
+  db.query(`CREATE TABLE IF NOT EXISTS scores (
+    id serial primary key,
+    date text not null,
+    style text not null,
+    initials text not null,
+    runs int not null,
+    mvp text,
+    created_at timestamptz default now()
+  )`).then(() => console.log('Leaderboard DB ready (Postgres)'))
+    .catch(e => { console.error('DB init failed:', e.message); db = null; });
+} else {
+  console.log('No DATABASE_URL — using in-memory leaderboard (ephemeral, local dev)');
+}
+
+async function boardTop(date, style) {
+  if (db) {
+    const { rows } = await db.query(
+      `SELECT initials, runs, mvp, created_at FROM scores
+       WHERE date=$1 AND style=$2 ORDER BY runs DESC, created_at ASC LIMIT 25`, [date, style]);
+    return rows;
+  }
+  return memScores.filter(s => s.date === date && s.style === style)
+    .sort((a, b) => b.runs - a.runs || a.created_at - b.created_at).slice(0, 25);
+}
+async function boardInsert(row) {
+  if (db) {
+    await db.query(`INSERT INTO scores (date, style, initials, runs, mvp) VALUES ($1,$2,$3,$4,$5)`,
+      [row.date, row.style, row.initials, row.runs, row.mvp]);
+  } else {
+    memScores.push({ ...row, created_at: Date.now() });
+  }
+}
+async function boardRank(date, style, runs) {
+  if (db) {
+    const { rows } = await db.query(
+      `SELECT count(*)::int AS ahead FROM scores WHERE date=$1 AND style=$2 AND runs > $3`, [date, style, runs]);
+    return rows[0].ahead + 1;
+  }
+  return memScores.filter(s => s.date === date && s.style === style && s.runs > runs).length + 1;
+}
 
 // Landing page is the v2 Daily Lineup game; the v1 "Classic" game stays at /classic
 app.get('/', (_req, res) => res.sendFile(join(__dirname, '../client/daily.html')));
 app.get('/classic', (_req, res) => res.sendFile(join(__dirname, '../client/index.html')));
+
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const { date, style } = req.query;
+    if (!date || !STYLES.has(style)) return res.status(400).json({ error: 'date and valid style required' });
+    res.json({ enabled: true, scores: await boardTop(date, style) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/leaderboard', async (req, res) => {
+  try {
+    const { date, style, initials, runs, mvp } = req.body ?? {};
+    const ini = String(initials ?? '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    const r = Number(runs);
+    if (!date || !STYLES.has(style) || !ini || !Number.isInteger(r) || r < 0 || r > 200)
+      return res.status(400).json({ error: 'invalid submission' });
+    await boardInsert({ date, style, initials: ini, runs: r, mvp: String(mvp ?? '').slice(0, 40) });
+    res.json({ enabled: true, scores: await boardTop(date, style), rank: await boardRank(date, style, r) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.use(express.static(join(__dirname, '../client'), {
   setHeaders: (res, filePath) => {

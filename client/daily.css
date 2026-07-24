@@ -263,6 +263,32 @@
 .boxscore-table .bs-line { text-align: right; color: var(--muted2); font-weight: 700; font-size: .74rem; white-space: nowrap; }
 .result-actions { display: flex; gap: 12px; margin-top: 10px; }
 
+/* ── Leaderboard ──────────────────────────────────────────────────────────── */
+.result-leaderboard, .home-leaderboard { width: 100%; }
+.lb-title { font-family: var(--font-display); font-size: .78rem; font-weight: 700; letter-spacing: 1.5px; color: var(--gold2); text-align: center; margin: 12px 0 6px; }
+.lb-note { text-align: center; color: var(--muted); font-size: .8rem; padding: 10px; }
+.lb-empty { text-align: center; color: var(--muted2); font-size: .82rem; padding: 8px; }
+.lb-rank-line { text-align: center; font-family: var(--font-display); font-weight: 900; font-size: 1.3rem; color: var(--gold2); margin-bottom: 6px; }
+.lb-submit {
+  display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px; margin-bottom: 8px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px;
+  font-size: .84rem; color: var(--muted2);
+}
+.lb-submit b { color: var(--gold2); }
+.lb-input {
+  width: 68px; text-align: center; text-transform: uppercase; letter-spacing: 3px;
+  font-family: var(--font-display); font-weight: 700; font-size: 1rem;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border2); border-radius: 7px; padding: 6px;
+}
+.lb-submit .btn-primary { padding: 7px 16px; }
+.lb-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.lb-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.lb-table tr.me td { background: rgba(232,160,32,.12); }
+.lb-rank { font-family: var(--font-display); font-weight: 700; color: var(--muted); width: 28px; text-align: center; }
+.lb-ini { font-family: var(--font-display); font-weight: 800; letter-spacing: 2px; color: var(--text); width: 54px; }
+.lb-runs { font-family: var(--font-display); font-weight: 800; color: var(--gold2); width: 44px; text-align: center; }
+.lb-mvp { color: var(--muted); font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+
 /* Reused linescore for one team */
 .gd-scoreboard .sb-table td, .gd-scoreboard .sb-table th { font-size: .72rem; }
 
