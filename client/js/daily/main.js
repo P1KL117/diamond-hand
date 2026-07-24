@@ -10,9 +10,14 @@ function yesterdayStr() {
   const d = new Date(); d.setDate(d.getDate() - 1);
   return d.toISOString().slice(0, 10);
 }
+const offsetDate = (d, days) => {
+  const dt = new Date(d + 'T12:00:00'); dt.setDate(dt.getDate() + days);
+  return dt.toISOString().slice(0, 10);
+};
 const params = new URLSearchParams(location.search);
-const GAME_DATE = params.get('date') || yesterdayStr();
-const FALLBACK_DATE = '2024-09-01'; // used if the target date has no final games
+const EXPLICIT_DATE = params.get('date');       // ?date= overrides (for testing)
+const GAME_DATE = EXPLICIT_DATE || yesterdayStr();
+const FALLBACK_DATE = '2024-09-01'; // last-resort demo slate (deep offseason only)
 
 // ── State ───────────────────────────────────────────────────────────────────
 let pool = null;
@@ -20,7 +25,7 @@ let draft = null;
 let activeDate = GAME_DATE;
 
 // draft UI state
-let draftSort = 'value';
+let draftSort = 'tb';
 let draftFilter = 'ALL';
 let sel = null; // { playerId, position } — currently selected player awaiting a slot tap
 let gameMode = 'daily'; // 'daily' | 'blind' | 'shuffled'
@@ -41,11 +46,19 @@ function show(name) {
 async function boot() {
   $('home-date').textContent = 'Loading last night\'s games…';
   try {
+    // Use the requested date; if it has no final games (early in the day / off-day),
+    // walk back to the most recent real slate rather than jumping to a random game.
     pool = await fetchDailyPool(GAME_DATE);
-    if (!pool.teams.length && GAME_DATE !== FALLBACK_DATE) {
-      pool = await fetchDailyPool(FALLBACK_DATE);
-      activeDate = FALLBACK_DATE;
+    activeDate = GAME_DATE;
+    if (!pool.teams.length && !EXPLICIT_DATE) {
+      let d = GAME_DATE;
+      for (let i = 0; i < 14 && !pool.teams.length; i++) {
+        d = offsetDate(d, -1);
+        pool = await fetchDailyPool(d);
+        if (pool.teams.length) activeDate = d;
+      }
     }
+    if (!pool.teams.length) { pool = await fetchDailyPool(FALLBACK_DATE); activeDate = FALLBACK_DATE; }
   } catch (e) {
     $('home-date').textContent = `Failed to load: ${e.message}`;
     return;
@@ -59,7 +72,7 @@ function fmtDate(d) {
 }
 
 function renderHome() {
-  const label = activeDate === GAME_DATE ? 'Games from' : 'Sample games from';
+  const label = activeDate === FALLBACK_DATE ? 'Demo slate —' : 'Games from';
   $('home-date').textContent = pool.teams.length
     ? `${label} ${fmtDate(activeDate)} · ${pool.teams.length} teams`
     : 'No completed games found for that date.';
@@ -120,28 +133,43 @@ function matchesFilter(p) {
   return p.positions.some(pos => (POS_GROUPS[draftFilter] || []).includes(pos));
 }
 
+const SEQ_CLASS = c => ['1B', '2B', '3B', 'HR'].includes(c) ? 'hit' : (c === 'BB' || c === 'HBP') ? 'walk' : 'out';
+const seqChips = codes => codes.map(c => `<span class="seq-chip ${SEQ_CLASS(c)}">${c}</span>`).join('');
+
 function rowHtml(p) {
   const open = draft.openPositionsFor(p);
   const eligible = open.length > 0;
   const posLabel = (eligible ? open : p.positions).join('/');
   const selected = sel && sel.playerId === p.id;
   const blind = gameMode === 'blind';
-
-  // Blind mode: hide last night's line; show season numbers instead (draft on reputation).
-  const sub = blind ? `${p.teamAbbr} · season` : `${p.teamAbbr} · ${p.line.summary} · ${seqCodes(p.results).join(' · ')}`;
   const s = p.stats;
-  const cols = blind
-    ? [['AVG', p.season.avg], ['HR', p.season.hr], ['RBI', p.season.rbi], ['OPS', p.season.ops], ['SB', p.season.sb]]
-    : [['AB', s.ab], ['H', s.h], ['HR', s.hr], ['RBI', s.rbi], ['BB', s.bb], ['TB', s.tb]];
-  const stats = cols.map(([l, v]) =>
-    `<span class="stat"><span class="stat-num">${v}</span><span class="stat-lbl">${l}</span></span>`).join('');
+
+  // Right-side stat cluster — a clean, spaced set (fewer columns than before).
+  const statCluster = blind
+    ? `<span class="pstat"><b>${p.season.avg}</b><i>AVG</i></span>
+       <span class="pstat"><b>${p.season.hr}</b><i>HR</i></span>
+       <span class="pstat"><b>${p.season.rbi}</b><i>RBI</i></span>
+       <span class="pstat"><b>${p.season.ops}</b><i>OPS</i></span>`
+    : `<span class="pstat-line">${s.h}-${s.ab}</span>
+       <span class="pstat"><b>${s.hr}</b><i>HR</i></span>
+       <span class="pstat"><b>${s.rbi}</b><i>RBI</i></span>
+       <span class="pstat"><b>${s.tb}</b><i>TB</i></span>`;
+
+  // Second line: the day sequence as prominent chips (hidden in blind mode).
+  const seqLine = blind
+    ? `<div class="prow-seq blind">last night hidden — reveal at game time</div>`
+    : `<div class="prow-seq">${seqChips(seqCodes(p.results))}</div>`;
+
   return `<button class="prow ${eligible ? '' : 'disabled'} ${selected ? 'selected' : ''}" data-id="${p.id}" ${eligible ? '' : 'disabled'}>
-    <span class="prow-badge">${posLabel}</span>
-    <span class="prow-id">
-      <span class="prow-name">${p.name}</span>
-      <span class="prow-sub">${sub}</span>
-    </span>
-    <span class="prow-stats">${stats}</span>
+    <div class="prow-top">
+      <span class="prow-badge">${posLabel}</span>
+      <span class="prow-id">
+        <span class="prow-name">${p.name}</span>
+        <span class="prow-sub">${p.teamAbbr} · vs ${draft.currentTeam?.opponent ?? ''}</span>
+      </span>
+      <span class="prow-stats">${statCluster}</span>
+    </div>
+    ${seqLine}
   </button>`;
 }
 
@@ -159,11 +187,16 @@ function renderBoard() {
     }
     board.innerHTML = html.join('') || '<div class="prow-sub" style="padding:10px">No players match.</div>';
   } else {
+    const key = p => {
+      if (draftSort === 'hits') return p.stats.h;
+      if (draftSort === 'avg') return p.stats.ab ? p.stats.h / p.stats.ab : 0;
+      return p.stats.tb; // 'tb' default
+    };
     players.sort((a, b) => {
       const ea = draft.isEligible(a), eb = draft.isEligible(b);
       if (ea !== eb) return ea ? -1 : 1;
       if (draftSort === 'name') return a.name.localeCompare(b.name);
-      return b.value - a.value;
+      return key(b) - key(a);
     });
     board.innerHTML = players.map(rowHtml).join('') || '<div class="prow-sub" style="padding:10px">No players match.</div>';
   }
@@ -425,16 +458,29 @@ function renderResult(res, lineup) {
       <tbody><tr><td class="sb-team-col">YOU</td>${cells}<td class="sb-r">${res.runs}</td></tr></tbody>
     </table>`;
 
-  // box score per player (runs driven in via their result contributions is complex;
-  // show their real batting line for the day)
-  $('result-lineup').innerHTML = lineup.map(p => {
-    const hot = p.value >= 4 ? 'hot' : '';
-    return `<div class="rl-box-row">
+  // MVP banner
+  const mvp = res.mvp;
+  const mvpPlayer = lineup.find(p => p.id === mvp?.id);
+  $('result-mvp').innerHTML = mvp ? `
+    <div class="mvp-card">
+      <div class="mvp-tag">★ GAME MVP</div>
+      <div class="mvp-name">${mvp.name}</div>
+      <div class="mvp-line">${mvpPlayer?.teamAbbr ?? ''} ${mvp.position} · ${mvp.RBI} RBI · ${mvp.R} R</div>
+    </div>` : '';
+
+  // box score: this sim game's R / RBI per player, plus their real day line
+  $('result-lineup').innerHTML = `
+    <div class="rl-box-head"><span class="rb-pos"></span><span class="rb-name"></span><span class="rb-rrbi">R&nbsp;&nbsp;RBI</span><span class="rb-line">last night</span></div>
+    ${lineup.map(p => {
+    const st = res.playerStats[p.id] ?? { R: 0, RBI: 0 };
+    const isMvp = p.id === mvp?.id;
+    return `<div class="rl-box-row ${isMvp ? 'is-mvp' : ''}">
       <span class="rb-pos">${p.position}</span>
       <span class="rb-name">${p.battingSlot}. ${p.name} <span style="color:var(--muted)">${p.teamAbbr}</span></span>
-      <span class="rb-line ${hot}">${p.line.summary}</span>
+      <span class="rb-rrbi"><b>${st.R}</b>&nbsp;&nbsp;<b>${st.RBI}</b></span>
+      <span class="rb-line">${p.line.summary}</span>
     </div>`;
-  }).join('');
+  }).join('')}`;
 }
 
 $('btn-result-home').addEventListener('click', () => { renderHome(); show('home'); });
@@ -443,7 +489,8 @@ $('btn-share').addEventListener('click', () => {
   const res = gdState.res;
   const line = cumulativeInnings(res.log.length);
   const grid = Array.from({ length: 9 }, (_, i) => line[i] != null ? line[i] : '·').join(' ');
-  const text = `⚾ Diamond Hand — Daily Lineup ${activeDate}\n${res.runs} RUNS\n${grid}\nDraft your lineup, beat my score!`;
+  const mvpTxt = res.mvp ? `\nMVP: ${res.mvp.name} (${res.mvp.RBI} RBI)` : '';
+  const text = `⚾ Diamond Hand — Daily Lineup ${activeDate}\n${res.runs} RUNS\n${grid}${mvpTxt}\nDraft your lineup, beat my score!`;
   navigator.clipboard?.writeText(text).then(() => {
     $('btn-share').textContent = '✓ Copied!';
     setTimeout(() => { $('btn-share').textContent = '📋 Copy Result'; }, 1800);
