@@ -34,7 +34,7 @@ export async function fetchDailyPool(date) {
 
   const teams = (raw.teams ?? []).map(t => ({
     id: t.id, name: t.name, abbreviation: t.abbreviation,
-    opponent: t.opponent, gamePk: t.gamePk,
+    opponent: t.opponent, gamePk: t.gamePk, runs: t.runs ?? 0, oppRuns: t.oppRuns ?? 0,
     players: t.players
       .map(p => {
         // Standard fielding positions this player played that night (drops PH/PR/P)

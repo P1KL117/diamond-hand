@@ -481,10 +481,54 @@ function renderScoreboard(inningRuns, total) {
     </table>`;
 }
 
+// ── League compare: your runs vs what every real team scored that day ─────────
+function leagueCompare(runs) {
+  const teams = (pool?.teams ?? []).map(t => ({ abbr: t.abbreviation, runs: t.runs, opp: t.opponent }));
+  const wins = teams.filter(t => runs > t.runs).sort((a, b) => b.runs - a.runs);
+  const losses = teams.filter(t => runs < t.runs).sort((a, b) => a.runs - b.runs);
+  const ties = teams.filter(t => runs === t.runs);
+  return { total: teams.length, beaten: wins.length, wins, losses, ties };
+}
+
+function showMatchupsModal(runs) {
+  const cmp = leagueCompare(runs);
+  const teamRow = (t, cls) => `<div class="mu-row ${cls}">
+    <span class="mu-team">${t.abbr} <span class="mu-opp">vs ${t.opp}</span></span>
+    <span class="mu-score">${runs}<span class="mu-dash">–</span>${t.runs}</span></div>`;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:460px">
+      <div class="modal-title">You'd have beaten ${cmp.beaten} of ${cmp.total} teams</div>
+      <div class="mu-cols">
+        <div class="mu-col">
+          <div class="mu-head win">BEAT (${cmp.wins.length})</div>
+          ${cmp.wins.map(t => teamRow(t, 'win')).join('') || '<div class="mu-none">—</div>'}
+        </div>
+        <div class="mu-col">
+          <div class="mu-head loss">LOST TO (${cmp.losses.length})</div>
+          ${cmp.losses.map(t => teamRow(t, 'loss')).join('') || '<div class="mu-none">—</div>'}
+          ${cmp.ties.length ? `<div class="mu-head tie">TIED (${cmp.ties.length})</div>${cmp.ties.map(t => teamRow(t, 'tie')).join('')}` : ''}
+        </div>
+      </div>
+      <div class="modal-actions"><button class="btn-primary" id="mu-close">Close</button></div>
+    </div>`;
+  modal.querySelector('#mu-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  $('app').appendChild(modal);
+}
+
 // ── Result ────────────────────────────────────────────────────────────────────
 function renderResult(res, lineup) {
   $('result-runs').textContent = res.runs;
   $('result-sub').textContent = `9 innings · ${res.realPAs} real at-bats used`;
+
+  const cmp = leagueCompare(res.runs);
+  $('result-league').innerHTML = cmp.total ? `
+    <div class="league-line">You'd have beaten <b>${cmp.beaten}</b> of <b>${cmp.total}</b> teams today</div>
+    <button id="btn-matchups" class="btn-secondary league-btn">See matchups →</button>` : '';
+  const mb = $('btn-matchups');
+  if (mb) mb.addEventListener('click', () => showMatchupsModal(res.runs));
 
   const per = cumulativeInnings(res.log.length);
   const cells = Array.from({ length: 9 }, (_, i) => `<td class="sb-cell">${per[i] != null ? per[i] : ''}</td>`).join('');
@@ -583,14 +627,16 @@ function mvpCell(raw) {
 
 function boardTable(scores, myInitials) {
   if (!scores.length) return '<div class="lb-empty">No scores yet — be the first!</div>';
+  const total = (pool?.teams ?? []).length;
   return `<table class="lb-table">
     <thead><tr>
       <th class="lb-rank">#</th><th class="lb-ini">WHO</th>
-      <th class="lb-runs">RUNS</th><th class="lb-mvp">GAME MVP</th>
+      <th class="lb-runs">RUNS</th><th class="lb-beat">BEAT</th><th class="lb-mvp">GAME MVP</th>
     </tr></thead>
     <tbody>${scores.map((s, i) => {
     const me = myInitials && s.initials === myInitials ? 'me' : '';
-    return `<tr class="${me}"><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td>${mvpCell(s.mvp)}</tr>`;
+    const beaten = total ? leagueCompare(s.runs).beaten : 0;
+    return `<tr class="${me}"><td class="lb-rank">${i + 1}</td><td class="lb-ini">${s.initials}</td><td class="lb-runs">${s.runs}</td><td class="lb-beat">${total ? `${beaten}/${total}` : '—'}</td>${mvpCell(s.mvp)}</tr>`;
   }).join('')}</tbody></table>`;
 }
 

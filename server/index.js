@@ -210,6 +210,8 @@ function extractTeamPools(feed) {
       ?? box[side]?.team?.abbreviation ?? side.toUpperCase(),
   });
   const away = meta('away'), home = meta('home');
+  const ls = feed?.liveData?.linescore?.teams ?? {};
+  const awayRuns = ls.away?.runs ?? 0, homeRuns = ls.home?.runs ?? 0;
 
   // Group plate appearances by batter id, in play order
   const pasByBatter = new Map();
@@ -259,8 +261,8 @@ function extractTeamPools(feed) {
   };
 
   return [
-    { ...away, gamePk, opponent: home.abbreviation, players: buildPlayers('away') },
-    { ...home, gamePk, opponent: away.abbreviation, players: buildPlayers('home') },
+    { ...away, gamePk, opponent: home.abbreviation, runs: awayRuns, oppRuns: homeRuns, players: buildPlayers('away') },
+    { ...home, gamePk, opponent: away.abbreviation, runs: homeRuns, oppRuns: awayRuns, players: buildPlayers('home') },
   ];
 }
 

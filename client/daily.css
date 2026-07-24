@@ -238,6 +238,31 @@
 .result-sub { color: var(--muted2); font-size: .9rem; text-align: center; }
 .result-line { width: 100%; overflow-x: auto; }
 
+.result-league { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.league-line { font-size: .95rem; color: var(--text); }
+.league-line b { font-family: var(--font-display); font-size: 1.15rem; color: var(--gold2); }
+.league-btn { padding: 6px 16px; font-size: .82rem; }
+
+/* Matchups pop-out */
+.mu-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+.mu-col { display: flex; flex-direction: column; gap: 3px; }
+.mu-head { font-family: var(--font-display); font-size: .66rem; font-weight: 700; letter-spacing: 1px; padding: 4px 2px; border-bottom: 1px solid var(--border2); }
+.mu-head.win { color: var(--green); }
+.mu-head.loss { color: var(--red); }
+.mu-head.tie { color: var(--muted2); margin-top: 8px; }
+.mu-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-radius: 6px; background: var(--surface2); font-size: .82rem; }
+.mu-row.win { border-left: 3px solid var(--green); }
+.mu-row.loss { border-left: 3px solid var(--red); }
+.mu-row.tie { border-left: 3px solid var(--muted); }
+.mu-team { font-family: var(--font-display); font-weight: 700; }
+.mu-opp { color: var(--muted); font-size: .68rem; font-weight: 500; margin-left: 4px; }
+.mu-score { font-family: var(--font-display); font-weight: 700; }
+.mu-dash { color: var(--muted); margin: 0 2px; }
+.mu-none { color: var(--muted); font-size: .8rem; padding: 6px 2px; }
+
+.lb-beat { font-family: var(--font-display); font-weight: 700; color: var(--muted2); width: 46px; text-align: center; font-size: .8rem; }
+.lb-table th.lb-beat { text-align: center; }
+
 .result-mvp { width: 100%; }
 .mvp-card {
   display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px;
