@@ -76,7 +76,6 @@ async function boardRank(date, style, runs) {
 // Landing page is the v2 Daily Lineup game; the v1 "Classic" game stays at /classic
 app.get('/', (_req, res) => res.sendFile(join(__dirname, '../client/daily.html')));
 app.get('/classic', (_req, res) => res.sendFile(join(__dirname, '../client/index.html')));
-app.get('/admin', (_req, res) => res.sendFile(join(__dirname, '../client/admin.html')));
 
 app.get('/api/leaderboard', async (req, res) => {
   try {
@@ -107,9 +106,10 @@ app.post('/api/leaderboard', async (req, res) => {
 });
 
 // Admin: clear leaderboard scores. Protected by the ADMIN_SECRET env var.
-// POST /api/admin/reset?secret=XXX   body: {} | {date} | {date,style}
+// Secret is passed in the x-admin-secret header (never in the URL). No UI/page —
+// call it from your own console. body: {} | {date} | {date,style}
 app.post('/api/admin/reset', async (req, res) => {
-  const secret = req.query.secret || req.headers['x-admin-secret'];
+  const secret = req.headers['x-admin-secret'];
   if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET)
     return res.status(403).json({ error: 'forbidden' });
   const { date, style } = req.body ?? {};
