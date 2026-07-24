@@ -635,8 +635,10 @@ $('btn-share').addEventListener('click', () => {
   const res = gdState.res;
   const line = cumulativeInnings(res.log.length);
   const grid = Array.from({ length: 9 }, (_, i) => line[i] != null ? line[i] : '·').join(' ');
+  const cmp = leagueCompare(res.runs);
   const mvpTxt = res.mvp ? `\nMVP: ${res.mvp.name} (${res.mvp.RBI} RBI)` : '';
-  const text = `⚾ Lineup Card — ${activeDate}\n${res.runs} RUNS\n${grid}${mvpTxt}\nFill the card, beat my score!`;
+  const beatTxt = cmp.total ? ` · beat ${cmp.beaten}/${cmp.total} teams` : '';
+  const text = `⚾ Lineup Card — ${activeDate}\n${res.runs} runs${beatTxt}\n${grid}${mvpTxt}\n\nFill the card, beat my score ⚾\n${location.origin}`;
   navigator.clipboard?.writeText(text).then(() => {
     $('btn-share').textContent = '✓ Copied!';
     setTimeout(() => { $('btn-share').textContent = '📋 Copy Result'; }, 1800);
