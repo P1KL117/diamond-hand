@@ -650,7 +650,10 @@ async function renderResultLeaderboard() {
   const gen = data.gen ?? 0;
 
   const title = `<div class="lb-title">DAILY LEADERBOARD · ${sty.toUpperCase()}</div>`;
-  if (hasSubmitted(gen, date, sty)) {
+  // Only treat you as "already submitted" if the board actually has scores — an
+  // empty board (fresh day or post-reset) always offers the submit box, so a
+  // reset can never leave anyone locked out.
+  if (data.scores.length && hasSubmitted(gen, date, sty)) {
     el.innerHTML = title + boardTable(data.scores, hasSubmitted(gen, date, sty));
     return;
   }
