@@ -20,11 +20,15 @@ export async function fetchDailyPool(date) {
     id: t.id, name: t.name, abbreviation: t.abbreviation,
     opponent: t.opponent, gamePk: t.gamePk,
     players: t.players
-      .filter(p => REQ.has(p.position))
       .map(p => {
+        // Standard fielding positions this player played that night (drops PH/PR/P)
+        const eligPositions = [...new Set((p.positions ?? [p.position]).filter(x => REQ.has(x)))];
+        if (!eligPositions.length) return null;
         const results = p.pas.map(mapPA);
         return {
-          id: p.id, name: p.name, position: p.position,
+          id: p.id, name: p.name,
+          position: eligPositions[0],   // primary shown on card
+          positions: eligPositions,     // all draftable positions
           teamAbbr: t.abbreviation, teamName: t.name,
           season: p.season,
           pas: p.pas, results,
@@ -32,7 +36,8 @@ export async function fetchDailyPool(date) {
           hits: results.filter(isHit).length,
           value: nightValue(results),
         };
-      }),
+      })
+      .filter(Boolean),
   })).filter(t => t.players.length);
 
   return { date: raw.date, teams };

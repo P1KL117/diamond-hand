@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diamond Hand — Daily Lineup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="daily.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <div id="screen-home" class="screen active">
+    <div class="home-wrap">
+      <div class="home-badge">DAILY LINEUP</div>
+      <h1 class="home-title">DIAMOND HAND</h1>
+      <p class="home-tag">Draft a lineup from last night's players. They hit exactly what they really did. Score as many runs as you can.</p>
+      <div id="home-date" class="home-date"></div>
+      <button id="btn-start-draft" class="btn-primary home-cta">Start Today's Draft →</button>
+      <div id="home-best" class="home-best"></div>
+      <div class="home-how">
+        <div class="how-step"><span class="how-num">1</span> A random team is rolled each round</div>
+        <div class="how-step"><span class="how-num">2</span> Pick a player &amp; slot them in your order</div>
+        <div class="how-step"><span class="how-num">3</span> Fill all 9 positions, then watch it play out</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRAFT -->
+  <div id="screen-draft" class="screen">
+    <div class="draft-wrap">
+      <div class="draft-header">
+        <div class="draft-round">
+          <span id="draft-round-label">Round 1 / 9</span>
+        </div>
+        <div id="position-tracker" class="position-tracker"></div>
+      </div>
+
+      <div id="draft-rolled" class="draft-rolled"></div>
+      <div id="draft-board" class="draft-board"></div>
+
+      <div class="draft-footer">
+        <button id="btn-draft-home" class="btn-secondary">← Quit</button>
+        <div id="draft-lineup-mini" class="draft-lineup-mini"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LINEUP REVIEW -->
+  <div id="screen-lineup" class="screen">
+    <div class="lineup-wrap">
+      <h2 class="lineup-title">YOUR LINEUP</h2>
+      <div id="lineup-list" class="lineup-list"></div>
+      <div class="lineup-actions">
+        <button id="btn-lineup-back" class="btn-secondary">← Back</button>
+        <button id="btn-play-game" class="btn-primary">Play Ball →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAMEDAY -->
+  <div id="screen-gameday" class="screen">
+    <div class="gameday-wrap">
+      <div class="gameday-top">
+        <div class="diamond-panel">
+          <svg id="diamond-svg" viewBox="0 0 200 200" class="diamond">
+            <rect x="0" y="0" width="200" height="200" fill="#111418" rx="4"/>
+            <polygon points="100,15 185,100 100,185 15,100" fill="none" stroke="#2a2d3e" stroke-width="1.5"/>
+            <line x1="100" y1="185" x2="185" y2="100" stroke="#2a2d3e" stroke-width="1"/>
+            <line x1="100" y1="185" x2="15"  y2="100" stroke="#2a2d3e" stroke-width="1"/>
+            <line x1="15"  y1="100" x2="100" y2="15"  stroke="#2a2d3e" stroke-width="1"/>
+            <line x1="185" y1="100" x2="100" y2="15"  stroke="#2a2d3e" stroke-width="1"/>
+            <circle cx="100" cy="100" r="6" fill="#1e2030" stroke="#333" stroke-width="1"/>
+            <rect id="base-1" x="177" y="90" width="16" height="16" rx="2" fill="#2a2d3e" stroke="#444"/>
+            <rect id="base-2" x="92"  y="4"  width="16" height="16" rx="2" fill="#2a2d3e" stroke="#444"/>
+            <rect id="base-3" x="7"   y="90" width="16" height="16" rx="2" fill="#2a2d3e" stroke="#444"/>
+            <polygon id="base-home" points="100,182 110,192 100,200 90,192" fill="#2a2d3e" stroke="#444"/>
+            <circle id="runner-1" cx="185" cy="98" r="7" fill="#f59e0b" opacity="0"/>
+            <circle id="runner-2" cx="100" cy="12" r="7" fill="#f59e0b" opacity="0"/>
+            <circle id="runner-3" cx="15"  cy="98" r="7" fill="#f59e0b" opacity="0"/>
+          </svg>
+          <div class="game-status">
+            <div id="gd-inning" class="inning-display">▲ 1st</div>
+            <div class="outs-row">
+              <span class="out-label">OUT</span>
+              <span class="out-dot" id="gd-out-0"></span>
+              <span class="out-dot" id="gd-out-1"></span>
+              <span class="out-dot" id="gd-out-2"></span>
+            </div>
+          </div>
+        </div>
+        <div class="gameday-right">
+          <div id="gd-scoreboard" class="scoreboard"></div>
+          <div class="gd-runs-big"><span id="gd-runs">0</span><span class="gd-runs-label">RUNS</span></div>
+          <div class="ticker">
+            <div class="ticker-title">PLAY BY PLAY</div>
+            <div id="gd-ticker" class="ticker-log"></div>
+          </div>
+        </div>
+      </div>
+      <div class="gameday-controls">
+        <button id="btn-gd-speed" class="btn-secondary">▶ 1×</button>
+        <button id="btn-gd-skip" class="btn-primary">Skip to Score ⏭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="screen-result" class="screen">
+    <div class="result-wrap">
+      <div class="result-badge">FINAL</div>
+      <div class="result-score"><span id="result-runs">0</span><span class="result-runs-label">RUNS</span></div>
+      <div id="result-sub" class="result-sub"></div>
+      <div id="result-line" class="result-line"></div>
+      <div id="result-lineup" class="result-lineup"></div>
+      <div class="result-actions">
+        <button id="btn-share" class="btn-secondary">📋 Copy Result</button>
+        <button id="btn-result-home" class="btn-primary">Home</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script type="module" src="js/daily/main.js"></script>
+</body>
+</html>

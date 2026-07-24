@@ -80,10 +80,12 @@ function extractTeamPools(feed) {
       const pas = id ? pasByBatter.get(id) : null;
       if (!pas || !pas.length) continue; // only players who actually batted
       const bat = p.seasonStats?.batting ?? {};
+      const allPos = (p.allPositions ?? []).map(x => x.abbreviation).filter(Boolean);
       out.push({
         id,
         name: p.person?.fullName ?? 'Unknown',
         position: p.position?.abbreviation ?? '?',
+        positions: allPos.length ? [...new Set(allPos)] : [p.position?.abbreviation ?? '?'],
         positionName: p.position?.name ?? '',
         positionCode: p.position?.code ?? '',
         battingOrder: p.battingOrder ?? null, // "100","200"... starters are multiples of 100
