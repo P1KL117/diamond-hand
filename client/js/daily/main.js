@@ -225,7 +225,10 @@ function renderBoard() {
 function renderTray() {
   const armed = !!sel;
   $('draft-tray').innerHTML = draft.slots.map((s, i) => {
-    if (s) return `<div class="tray-slot filled"><span class="ts-num">${i + 1}</span><span class="ts-pos">${s.position}</span><span class="ts-name">${lastName(s.name)}</span></div>`;
+    if (s) {
+      const tip = `${s.name} — ${s.line.summary} · ${seqCodes(s.results).join(' ')} (tap to view)`;
+      return `<div class="tray-slot filled" data-slot="${i}" title="${tip}"><span class="ts-num">${i + 1}</span><span class="ts-pos">${s.position}</span><span class="ts-name">${lastName(s.name)}</span></div>`;
+    }
     return `<div class="tray-slot open ${armed ? 'armed' : ''}" data-slot="${i}"><span class="ts-num">${i + 1}</span><span class="ts-empty">open</span></div>`;
   }).join('');
 }
@@ -286,9 +289,37 @@ $('draft-board').addEventListener('click', e => {
   if (player) selectPlayer(player);
 });
 $('draft-tray').addEventListener('click', e => {
+  const filled = e.target.closest('.tray-slot.filled');
+  if (filled) { showLineupPlayerModal(draft.slots[Number(filled.dataset.slot)]); return; }
   const slot = e.target.closest('.tray-slot.open.armed'); if (!slot) return;
   placeInSlot(Number(slot.dataset.slot));
 });
+
+// Popup: what a drafted player did that day (their at-bats, in order)
+function showLineupPlayerModal(p) {
+  if (!p) return;
+  const s = p.stats;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:420px">
+      <div class="modal-title">${p.name} <span style="color:var(--muted2);font-size:.8rem;font-weight:600">${p.position} · ${p.teamAbbr}</span></div>
+      <div class="modal-subtitle">${p.line.summary} · these at-bats play in order</div>
+      <div class="prow-seq" style="margin:12px 0;justify-content:center">${seqChips(seqCodes(p.results))}</div>
+      <div class="prow-stats" style="justify-content:center;gap:16px">
+        <span class="pstat"><b>${s.ab}</b><i>AB</i></span>
+        <span class="pstat"><b>${s.h}</b><i>H</i></span>
+        <span class="pstat"><b>${s.hr}</b><i>HR</i></span>
+        <span class="pstat"><b>${s.rbi}</b><i>RBI</i></span>
+        <span class="pstat"><b>${s.bb}</b><i>BB</i></span>
+        <span class="pstat"><b>${s.tb}</b><i>TB</i></span>
+      </div>
+      <div class="modal-actions"><button class="btn-primary" id="lp-close">Close</button></div>
+    </div>`;
+  modal.querySelector('#lp-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  $('app').appendChild(modal);
+}
 $('draft-filters').addEventListener('click', e => {
   const chip = e.target.closest('.fchip'); if (!chip) return;
   draftFilter = chip.dataset.f; renderDraft();

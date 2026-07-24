@@ -152,7 +152,8 @@
 .tray-slot .ts-pos { font-family: var(--font-display); font-weight: 700; font-size: .74rem; color: var(--gold2); }
 .tray-slot .ts-name { font-size: .58rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .tray-slot .ts-empty { font-size: .58rem; color: var(--muted); }
-.tray-slot.filled { border-color: var(--green); background: rgba(24,207,110,.08); }
+.tray-slot.filled { border-color: var(--green); background: rgba(24,207,110,.08); cursor: pointer; }
+.tray-slot.filled:hover { border-color: var(--gold); background: rgba(232,160,32,.1); }
 .tray-slot.open.armed {
   border-color: var(--gold2); background: rgba(232,160,32,.14); cursor: pointer;
   animation: trayPulse 1.1s ease-in-out infinite;
