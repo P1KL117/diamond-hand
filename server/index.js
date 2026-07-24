@@ -76,6 +76,7 @@ async function boardRank(date, style, runs) {
 // Landing page is the v2 Daily Lineup game; the v1 "Classic" game stays at /classic
 app.get('/', (_req, res) => res.sendFile(join(__dirname, '../client/daily.html')));
 app.get('/classic', (_req, res) => res.sendFile(join(__dirname, '../client/index.html')));
+app.get('/admin', (_req, res) => res.sendFile(join(__dirname, '../client/admin.html')));
 
 app.get('/api/leaderboard', async (req, res) => {
   try {
