@@ -636,7 +636,7 @@ $('btn-share').addEventListener('click', () => {
   const line = cumulativeInnings(res.log.length);
   const grid = Array.from({ length: 9 }, (_, i) => line[i] != null ? line[i] : '·').join(' ');
   const mvpTxt = res.mvp ? `\nMVP: ${res.mvp.name} (${res.mvp.RBI} RBI)` : '';
-  const text = `⚾ Diamond Hand — Daily Lineup ${activeDate}\n${res.runs} RUNS\n${grid}${mvpTxt}\nDraft your lineup, beat my score!`;
+  const text = `⚾ Lineup Card — ${activeDate}\n${res.runs} RUNS\n${grid}${mvpTxt}\nFill the card, beat my score!`;
   navigator.clipboard?.writeText(text).then(() => {
     $('btn-share').textContent = '✓ Copied!';
     setTimeout(() => { $('btn-share').textContent = '📋 Copy Result'; }, 1800);
