@@ -20,15 +20,16 @@ export function createDraft({ teams, date, style = 'normal', deterministic = tru
   let currentTeam = null;
   let rerollsLeft = REROLLS_PER_ROUND;
 
-  // Pre-DH-era slates (old NL games) have no player who played DH — without this
-  // the DH slot can never be filled. When the pool has no natural DH, any batter
-  // may fill DH.
+  // Pre-DH-era slates (old NL games) have no player who played DH. To avoid a
+  // dead-end, ONLY when DH is the last unfilled slot AND the pool has no natural
+  // DH, any remaining batter may fill it. Otherwise DH is never offered to a
+  // non-DH player (so cards never read "1B/DH").
   const hasNaturalDH = (teams ?? []).some(t => (t.players ?? []).some(p => (p.positions ?? []).includes('DH')));
 
-  // A player's still-open draftable positions (multi-position players can fill any)
   const openPositionsFor = p => {
     const own = (p.positions ?? [p.position]).filter(pos => !filledPositions.has(pos));
-    if (!hasNaturalDH && !filledPositions.has('DH')) own.push('DH');
+    const onlyDHLeft = !filledPositions.has('DH') && filledPositions.size === totalRounds - 1;
+    if (!hasNaturalDH && onlyDHLeft && own.length === 0) own.push('DH');
     return [...new Set(own)];
   };
   const isEligible = p => openPositionsFor(p).length > 0;
