@@ -230,8 +230,8 @@
   font-family: var(--font-display); font-size: .72rem; font-weight: 700; padding: 2px 6px;
   border-radius: 4px; background: var(--surface3); color: var(--muted); border: 1px solid var(--border);
 }
-.gdl-code.played { background: var(--surface); color: var(--muted2); opacity: .5; text-decoration: line-through; }
-.gdl-code.played.hit { color: var(--green); border-color: rgba(24,207,110,.4); opacity: .8; text-decoration: none; }
+/* every used outcome grays out (hits included) */
+.gdl-code.played { background: var(--surface); color: var(--muted); opacity: .45; text-decoration: line-through; border-color: var(--border); }
 .gdl-code.next { border-color: var(--gold2); color: var(--gold2); }
 .gdl-abs { font-size: .68rem; color: var(--muted); white-space: nowrap; font-weight: 600; }
 .gdl-abs .abs-hot { color: var(--gold2); }
