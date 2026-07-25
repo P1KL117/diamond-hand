@@ -50,6 +50,37 @@
     </div>
   </div>
 
+  <!-- FREE PLAY SETUP -->
+  <div id="screen-setup" class="screen">
+    <div class="setup-wrap">
+      <h2 class="setup-title">Set up your game</h2>
+      <p class="setup-sub">Free Play — choose your teams and options.</p>
+
+      <div class="setup-group">
+        <div class="setup-label">ORDER CHANGES</div>
+        <div class="mode-select" id="setup-order">
+          <button class="mode-chip active" data-order="off">Off</button>
+          <button class="mode-chip" data-order="on">On</button>
+        </div>
+      </div>
+      <p class="setup-hint" id="setup-order-hint">Off — batting order is locked as you draft it (like Daily).</p>
+
+      <div class="setup-group setup-group-col">
+        <div class="setup-label-row">
+          <span class="setup-label">TEAMS</span>
+          <span><button id="setup-teams-all" class="setup-mini">All</button><button id="setup-teams-clear" class="setup-mini">Clear</button></span>
+        </div>
+        <div id="setup-teams" class="setup-teams"></div>
+      </div>
+      <p class="setup-hint" id="setup-teams-hint"></p>
+
+      <div class="setup-actions">
+        <button id="btn-setup-back" class="btn-secondary">← Back</button>
+        <button id="btn-setup-start" class="btn-primary">Start Draft →</button>
+      </div>
+    </div>
+  </div>
+
   <!-- DRAFT -->
   <div id="screen-draft" class="screen">
     <div class="draft2">

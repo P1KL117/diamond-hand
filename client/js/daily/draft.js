@@ -20,8 +20,17 @@ export function createDraft({ teams, date, style = 'normal', deterministic = tru
   let currentTeam = null;
   let rerollsLeft = REROLLS_PER_ROUND;
 
+  // Pre-DH-era slates (old NL games) have no player who played DH — without this
+  // the DH slot can never be filled. When the pool has no natural DH, any batter
+  // may fill DH.
+  const hasNaturalDH = (teams ?? []).some(t => (t.players ?? []).some(p => (p.positions ?? []).includes('DH')));
+
   // A player's still-open draftable positions (multi-position players can fill any)
-  const openPositionsFor = p => (p.positions ?? [p.position]).filter(pos => !filledPositions.has(pos));
+  const openPositionsFor = p => {
+    const own = (p.positions ?? [p.position]).filter(pos => !filledPositions.has(pos));
+    if (!hasNaturalDH && !filledPositions.has('DH')) own.push('DH');
+    return [...new Set(own)];
+  };
   const isEligible = p => openPositionsFor(p).length > 0;
   const eligible = team => team.players.filter(isEligible);
 
@@ -69,6 +78,14 @@ export function createDraft({ teams, date, style = 'normal', deterministic = tru
     return rollTeam();
   }
 
+  // Swap two batting slots (for the optional post-draft reorder in Free Play).
+  function swapSlots(i, j) {
+    const a = slots[i], b = slots[j];
+    slots[i] = b; slots[j] = a;
+    if (slots[i]) slots[i].battingSlot = i + 1;
+    if (slots[j]) slots[j].battingSlot = j + 1;
+  }
+
   return {
     get round() { return round; },
     get totalRounds() { return totalRounds; },
@@ -85,6 +102,7 @@ export function createDraft({ teams, date, style = 'normal', deterministic = tru
     eligible,
     rollTeam,
     pick,
+    swapSlots,
     start,
     isComplete: () => round >= totalRounds,
     lineup: () => slots.filter(Boolean), // in batting order

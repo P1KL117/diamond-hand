@@ -31,6 +31,8 @@ let sel = null; // { playerId, position } — currently selected player awaiting
 let cadence = 'daily'; // 'daily' | 'free'
 let style = 'normal';  // 'normal' | 'blind' | 'shuffled'
 let dailyDate = null;  // the resolved daily slate (Daily cadence locks to this)
+let orderChanges = false;      // free play: can rearrange batting order after drafting
+let selectedTeamIds = null;    // free play: Set of team ids to draft from (null = all)
 
 const STYLE_DESC = {
   normal: 'See exactly what each player did — pure lineup construction.',
@@ -106,17 +108,62 @@ $('date-picker').addEventListener('change', async e => {
   const d = e.target.value; if (!d) return;
   $('home-date').textContent = 'Loading…';
   try { pool = await fetchDailyPool(d); activeDate = d; } catch { pool = { teams: [] }; }
+  selectedTeamIds = null; // new slate → reset team picks
   renderHome();
 });
 
 // ── Draft ───────────────────────────────────────────────────────────────────
+// Home "Start" → Daily goes straight to the draft; Free Play goes to the setup screen.
+function onStartClick() {
+  if (cadence === 'free') { renderSetup(); show('setup'); }
+  else { orderChanges = false; selectedTeamIds = null; startDraft(); }
+}
+
 function startDraft() {
-  draft = createDraft({ teams: pool.teams, date: activeDate, style, deterministic: cadence === 'daily' });
+  let teams = pool.teams;
+  if (cadence === 'free' && selectedTeamIds && selectedTeamIds.size) {
+    const filtered = teams.filter(t => selectedTeamIds.has(t.id));
+    if (filtered.length) teams = filtered;
+  }
+  draft = createDraft({ teams, date: activeDate, style, deterministic: cadence === 'daily' });
   draft.start();
   sel = null; draftFilter = 'ALL';
   renderDraft();
   show('draft');
 }
+
+// ── Free Play setup screen ────────────────────────────────────────────────────
+function renderSetup() {
+  document.querySelectorAll('#setup-order .mode-chip').forEach(c => c.classList.toggle('active', (c.dataset.order === 'on') === orderChanges));
+  $('setup-order-hint').textContent = orderChanges
+    ? 'On — after drafting, tap two players in the review to swap their batting spots.'
+    : 'Off — batting order is locked as you draft it (like Daily).';
+  if (!selectedTeamIds) selectedTeamIds = new Set((pool.teams ?? []).map(t => t.id));
+  $('setup-teams').innerHTML = (pool.teams ?? []).map(t =>
+    `<button class="team-chip ${selectedTeamIds.has(t.id) ? 'sel' : ''}" data-id="${t.id}">${t.abbreviation}<span class="tc-opp">v ${t.opponent}</span></button>`).join('');
+  updateTeamsHint();
+}
+function updateTeamsHint() {
+  const n = selectedTeamIds ? selectedTeamIds.size : 0;
+  const el = $('setup-teams-hint');
+  el.textContent = n === 0 ? 'Pick at least one team to draft from.'
+    : `Every roll comes from your ${n} selected team${n > 1 ? 's' : ''}.`;
+  $('btn-setup-start').disabled = n === 0;
+}
+$('setup-order').addEventListener('click', e => {
+  const c = e.target.closest('.mode-chip'); if (!c) return;
+  orderChanges = c.dataset.order === 'on'; renderSetup();
+});
+$('setup-teams').addEventListener('click', e => {
+  const c = e.target.closest('.team-chip'); if (!c) return;
+  const id = Number(c.dataset.id);
+  if (selectedTeamIds.has(id)) selectedTeamIds.delete(id); else selectedTeamIds.add(id);
+  c.classList.toggle('sel'); updateTeamsHint();
+});
+$('setup-teams-all').addEventListener('click', () => { selectedTeamIds = new Set((pool.teams ?? []).map(t => t.id)); renderSetup(); });
+$('setup-teams-clear').addEventListener('click', () => { selectedTeamIds = new Set(); renderSetup(); });
+$('btn-setup-back').addEventListener('click', () => show('home'));
+$('btn-setup-start').addEventListener('click', () => { if (selectedTeamIds && selectedTeamIds.size) startDraft(); });
 
 const lastName = n => n.split(' ').slice(-1)[0];
 const POS_GROUPS = { IF: ['1B', '2B', '3B', 'SS'], OF: ['LF', 'CF', 'RF'], C: ['C'], DH: ['DH'] };
@@ -327,14 +374,18 @@ $('draft-filters').addEventListener('click', e => {
 $('draft-sort').addEventListener('change', e => { draftSort = e.target.value; renderBoard(); });
 $('btn-reroll').addEventListener('click', () => { const r = draft.reroll(); if (r.ok) { sel = null; renderDraft(); } });
 
-$('btn-start-draft').addEventListener('click', startDraft);
+$('btn-start-draft').addEventListener('click', onStartClick);
 $('btn-draft-home').addEventListener('click', () => show('home'));
 
 // ── Lineup review ─────────────────────────────────────────────────────────────
+let swapSel = null; // index of the first row picked for a reorder swap
 function renderLineupReview() {
-  $('lineup-list').innerHTML = draft.lineup().map(p => {
+  const reorder = cadence === 'free' && orderChanges;
+  const hint = reorder ? `<div class="lineup-reorder-hint">↕ Tap two players to swap their batting spots.</div>` : '';
+  $('lineup-list').innerHTML = hint + draft.lineup().map(p => {
     const hot = p.value >= 4 ? 'hot' : '';
-    return `<div class="lineup-row">
+    const i = p.battingSlot - 1;
+    return `<div class="lineup-row${reorder ? ' reorderable' : ''}${swapSel === i ? ' swap-sel' : ''}" data-slot="${i}">
       <span class="lr-slot">${p.battingSlot}</span>
       <span class="lr-pos">${p.position}</span>
       <span class="lr-name">${p.name}</span>
@@ -343,7 +394,15 @@ function renderLineupReview() {
     </div>`;
   }).join('');
 }
-$('btn-lineup-back').addEventListener('click', () => { renderDraft(); show('draft'); });
+$('lineup-list').addEventListener('click', e => {
+  if (!(cadence === 'free' && orderChanges)) return;
+  const row = e.target.closest('.lineup-row[data-slot]'); if (!row) return;
+  const idx = Number(row.dataset.slot);
+  if (swapSel === null) { swapSel = idx; }
+  else { if (swapSel !== idx) draft.swapSlots(swapSel, idx); swapSel = null; }
+  renderLineupReview();
+});
+$('btn-lineup-back').addEventListener('click', () => { swapSel = null; renderDraft(); show('draft'); });
 $('btn-play-game').addEventListener('click', startGameday);
 
 // ── Gameday play-out ──────────────────────────────────────────────────────────
