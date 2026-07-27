@@ -745,8 +745,8 @@ function renderResult(res, lineup) {
   $('result-lineup').innerHTML = boxScoreTable(res, lineup);
 }
 
-// Daily-only: how close your draft was to the best achievable one (same tape + rerolls)
-const triedSession = new Set(); // private-mode fallback for the "tried once" gate
+// Daily-only: how close your draft was to the best achievable one (same tape + rerolls).
+// Shown on the result screen after a game — never on the home screen.
 function renderBestDraft(res) {
   const el = $('result-best');
   if (!el) return;
@@ -761,17 +761,8 @@ function renderBestDraft(res) {
     const verdict = gap <= 0
       ? `<span class="best-nailed">🎯 You nailed it — that's the best draft we found.</span>`
       : `you left <b>${gap}</b> run${gap === 1 ? '' : 's'} on the table`;
-
-    // the ideal lineup itself is a spoiler — unlock it only after a first attempt
-    const triedKey = `lc-tried-${gdState.date}-${gdState.style}`;
-    let triedBefore;
-    try { triedBefore = !!localStorage.getItem(triedKey); localStorage.setItem(triedKey, '1'); }
-    catch { triedBefore = triedSession.has(triedKey); triedSession.add(triedKey); }
     const reveal = gap <= 0 ? ''
-      : triedBefore
-        ? `<button id="btn-ideal" class="btn-secondary best-btn">Show the ideal lineup →</button>`
-        : `<div class="best-locked">🔒 Play again to reveal the ideal lineup</div>`;
-
+      : `<button id="btn-ideal" class="btn-secondary best-btn">Show the ideal lineup →</button>`;
     el.innerHTML = `<div class="best-line">Best possible draft: <b>${best.runs}</b> runs · ${verdict}</div>${reveal}`;
     const ib = $('btn-ideal');
     if (ib) ib.addEventListener('click', () => showIdealLineupModal(best));
