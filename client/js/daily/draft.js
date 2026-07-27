@@ -2,10 +2,14 @@ import { REQUIRED_POSITIONS } from './pool.js';
 import { seededRng } from './rng.js';
 
 // Pure draft state machine for the Daily Lineup positional draft.
-// Each round rolls a team; the player picks one eligible batter (a still-open
-// defensive position) and assigns a batting slot.
-// Daily (deterministic) → same team rolls for everyone that day. Free Play
-// (deterministic:false) → a fresh random roll sequence on every draft.
+//
+// Daily (deterministic=true) → a FIXED TAPE of 11 teams, the same for everyone
+//   that day+style. You start on tape[0]; a reroll advances to the next team on
+//   the tape and costs one of a shared budget of 2 (not per-round); a pick also
+//   advances the tape. So you only ever encounter teams #1–#11 (9 picks + ≤2
+//   skips). A team that can't fill any open position costs a reroll to pass.
+// Free Play (deterministic=false) → a fresh random roll each time, 2 rerolls
+//   per round (unchanged).
 export function createDraft({ teams, date, style = 'normal', deterministic = true }) {
   const rng = deterministic
     ? seededRng(`${date}:${style}`)
@@ -13,12 +17,17 @@ export function createDraft({ teams, date, style = 'normal', deterministic = tru
   const positions = [...REQUIRED_POSITIONS];
   const totalRounds = positions.length; // 9
 
-  const REROLLS_PER_ROUND = 2;
+  const tapeMode = deterministic;                 // Daily uses the fixed tape
+  const REROLLS_PER_ROUND = 2;                    // Free Play budget (per round)
+  const TAPE_LEN = 11, TAPE_BUDGET = 2;           // Daily: 9 picks + 2 skips
+  const tape = tapeMode ? rng.shuffle(teams).slice(0, Math.min(TAPE_LEN, teams.length)) : [];
+  let pointer = 0;
+
   const filledPositions = new Set();
   const slots = Array(totalRounds).fill(null); // batting order (index 0 = leadoff)
   let round = 0;
   let currentTeam = null;
-  let rerollsLeft = REROLLS_PER_ROUND;
+  let rerollsLeft = tapeMode ? TAPE_BUDGET : REROLLS_PER_ROUND;
 
   // Pre-DH-era slates (old NL games) have no player who played DH. To avoid a
   // dead-end, ONLY when DH is the last unfilled slot AND the pool has no natural
@@ -36,7 +45,16 @@ export function createDraft({ teams, date, style = 'normal', deterministic = tru
   const eligible = team => team.players.filter(isEligible);
 
   function rollTeam() {
-    // advance the seeded roll until a team with an eligible player appears
+    if (tapeMode) {
+      currentTeam = tape[pointer] ?? null;
+      // safety: a dead team costs a reroll to pass, but if you're out of budget
+      // don't soft-lock — free-advance to the next team that can fill something
+      while (currentTeam && !eligible(currentTeam).length && rerollsLeft <= 0 && pointer < tape.length - 1) {
+        pointer++; currentTeam = tape[pointer];
+      }
+      return currentTeam;
+    }
+    // Free Play: advance the random roll until a team with an eligible player appears
     for (let i = 0; i < 500; i++) {
       const t = rng.pick(teams);
       if (eligible(t).length) { currentTeam = t; return t; }
@@ -61,21 +79,25 @@ export function createDraft({ teams, date, style = 'normal', deterministic = tru
     slots[slotIndex] = { ...player, position: pos, battingSlot: slotIndex + 1 };
     filledPositions.add(pos);
     round++;
-    rerollsLeft = REROLLS_PER_ROUND; // reset for the next round
+    if (tapeMode) pointer++;                      // a pick consumes a tape slot; budget is shared
+    else rerollsLeft = REROLLS_PER_ROUND;         // Free Play resets rerolls per round
     return { ok: true, done: round >= totalRounds };
   }
 
-  // Manually roll a fresh team (costs a reroll). Team repeats are allowed.
+  // Manually reroll (costs a reroll). Daily → advance the fixed tape; Free Play → new random team.
   function reroll() {
     if (rerollsLeft <= 0) return { ok: false, error: 'no rerolls left' };
+    if (tapeMode && pointer >= tape.length - 1) return { ok: false, error: 'end of tape' };
     rerollsLeft--;
-    rollTeam();
+    if (tapeMode) { pointer++; currentTeam = tape[pointer] ?? null; }
+    else rollTeam();
     return { ok: true, rerollsLeft };
   }
 
   function start() {
     round = 0; filledPositions.clear(); slots.fill(null);
-    rerollsLeft = REROLLS_PER_ROUND;
+    pointer = 0;
+    rerollsLeft = tapeMode ? TAPE_BUDGET : REROLLS_PER_ROUND;
     return rollTeam();
   }
 
