@@ -66,7 +66,49 @@ async function boot() {
   dailyDate = activeDate;                 // Daily cadence is locked to this slate
   $('date-picker').value = activeDate;
   renderHome();
+  if (!seenIntro()) showHowTo();          // first visit only
 }
+
+// ── How to Play (first-run intro + reopenable) ────────────────────────────────
+let introSeenSession = false;
+function seenIntro(markSeen) {
+  const KEY = 'lc-seen-intro';
+  if (markSeen) { introSeenSession = true; try { localStorage.setItem(KEY, '1'); } catch {} return; }
+  try { if (localStorage.getItem(KEY)) return true; } catch {}
+  return introSeenSession; // private mode: don't nag more than once per session
+}
+const HOWTO_CARDS = [
+  { icon: '📋', title: 'Draft a real lineup', body: 'Each day you draft 9 players from the games that were played yesterday. A random team is rolled each round — pick a player and slot them into your batting order.' },
+  { icon: '⚾', title: 'They hit what they really hit', body: "Every player's at-bats play out exactly as they happened in real life. All that matters is who you pick and how you set the order." },
+  { icon: '🏆', title: 'Beat the league', body: 'Score as many runs as you can — and try to outscore every real team that played that day. Then land on the daily leaderboard.' },
+];
+function showHowTo() {
+  seenIntro(true);
+  let i = 0;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  const render = () => {
+    const c = HOWTO_CARDS[i], last = i === HOWTO_CARDS.length - 1;
+    modal.innerHTML = `
+      <div class="modal-box howto-box">
+        <div class="howto-icon">${c.icon}</div>
+        <div class="howto-title">${c.title}</div>
+        <div class="howto-body">${c.body}</div>
+        <div class="howto-dots">${HOWTO_CARDS.map((_, j) => `<span class="howto-dot ${j === i ? 'on' : ''}"></span>`).join('')}</div>
+        <div class="modal-actions">
+          ${i > 0 ? '<button class="btn-secondary" id="ht-back">Back</button>' : '<button class="btn-secondary" id="ht-skip">Skip</button>'}
+          <button class="btn-primary" id="ht-next">${last ? 'Got it ⚾' : 'Next →'}</button>
+        </div>
+      </div>`;
+    modal.querySelector('#ht-next').addEventListener('click', () => { if (last) modal.remove(); else { i++; render(); } });
+    modal.querySelector('#ht-back')?.addEventListener('click', () => { i--; render(); });
+    modal.querySelector('#ht-skip')?.addEventListener('click', () => modal.remove());
+  };
+  render();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  $('app').appendChild(modal);
+}
+$('btn-how-to').addEventListener('click', showHowTo);
 
 function fmtDate(d) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US',

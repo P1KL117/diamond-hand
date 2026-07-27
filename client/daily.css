@@ -12,7 +12,22 @@
 }
 .home-title { font-family: var(--font-display); font-size: 3.4rem; font-weight: 900; letter-spacing: 2px; line-height: 1; }
 .home-tag { color: var(--muted2); font-size: .96rem; line-height: 1.55; max-width: 440px; }
+.home-howto-link {
+  background: none; border: none; color: var(--gold2); font-size: .82rem; font-weight: 600;
+  cursor: pointer; padding: 2px 6px; opacity: .85;
+}
+.home-howto-link:hover { opacity: 1; text-decoration: underline; }
 .home-date { font-size: .82rem; color: var(--muted); font-weight: 600; letter-spacing: 1px; }
+
+/* How-to-Play intro modal */
+.howto-box { max-width: 380px; text-align: center; }
+.howto-icon { font-size: 2.6rem; line-height: 1; margin-bottom: 6px; }
+.howto-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 900; letter-spacing: .5px; margin-bottom: 8px; }
+.howto-body { color: var(--muted2); font-size: .92rem; line-height: 1.55; }
+.howto-dots { display: flex; justify-content: center; gap: 7px; margin: 16px 0 4px; }
+.howto-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); transition: background .15s; }
+.howto-dot.on { background: var(--gold2); }
+.howto-box .modal-actions { justify-content: space-between; }
 .mode-group { display: flex; align-items: center; gap: 10px; }
 .mode-label { font-family: var(--font-display); font-size: .66rem; letter-spacing: 1.5px; color: var(--muted); width: 44px; text-align: right; }
 .mode-select { display: flex; gap: 6px; }
