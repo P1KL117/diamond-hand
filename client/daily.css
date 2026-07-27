@@ -231,18 +231,30 @@
 .lineup-reorder-hint { font-size: .78rem; color: var(--gold2); text-align: center; padding: 2px 0 6px; }
 .lineup-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; }
 
-/* ── GAMEDAY (fixed viewport height; play-by-play sits beside the diamond,
-   the lineup gets the full width below) ─────────────────────────────────────── */
-.gameday-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 14px; gap: 10px; max-width: 940px; margin: 0 auto; width: 100%; }
-/* top: diamond on the left, scoreboard + runs + play-by-play on the right */
-.gameday-head { display: flex; gap: 14px; flex-shrink: 0; min-height: 0; align-items: stretch; height: 210px; max-height: 34vh; }
-.diamond-panel { flex-shrink: 0; }
-.gameday-info { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+/* ── GAMEDAY (compact scoreboard head; play-by-play + lineup share the body) ─── */
+.gameday-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 14px; gap: 9px; max-width: 940px; margin: 0 auto; width: 100%; }
+/* head: compact — diamond + scoreboard + runs, sized to the diamond only */
+.gameday-head { display: flex; gap: 14px; flex-shrink: 0; align-items: center; }
+.diamond-panel { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.gameday-head .diamond { width: 132px; height: 132px; }
+@media (max-width: 760px) { .gameday-head .diamond { width: 104px; height: 104px; } }
+.gameday-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 .gd-runs-big { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
 .gd-runs-big #gd-runs { font-family: var(--font-display); font-size: 2.2rem; font-weight: 900; color: var(--gold2); line-height: 1; }
 .gd-runs-label { font-size: .74rem; color: var(--muted); letter-spacing: 2px; font-weight: 600; }
-.gd-ticker-box { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
-.gd-ticker-box .ticker-log { flex: 1; overflow-y: auto; min-height: 0; }
+
+/* body: play-by-play | lineup, both fill the remaining height and scroll */
+.gameday-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 5fr 6fr; gap: 10px; }
+.gd-panel { min-height: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; overflow: hidden; }
+.gd-panel-title {
+  font-family: var(--font-display); font-size: .66rem; font-weight: 700; letter-spacing: 1.5px; color: var(--muted);
+  padding: 7px 11px 5px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.gd-ticker-box .ticker-log { flex: 1; overflow-y: auto; min-height: 0; padding: 6px 11px; }
+.gd-lineup-wrap #gd-lineup { flex: 1; overflow-y: auto; min-height: 0; padding: 6px; }
+@media (max-width: 760px) {
+  .gameday-body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 0.85fr) minmax(0, 1.25fr); }
+}
 .ticker-entry.inning-divider {
   color: var(--gold2); text-align: center; font-family: var(--font-display); font-weight: 700;
   letter-spacing: 1px; font-size: .72rem; margin: 4px 0; opacity: .85;
@@ -270,21 +282,18 @@
 .nb-team { font-size: .68rem; color: var(--muted); font-family: var(--font-display); font-weight: 700; }
 .nb-line { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: .82rem; color: var(--muted2); }
 
-/* lineup: full width, takes all remaining height */
-.gd-lineup-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
-#gd-lineup { flex: 1; overflow-y: auto; min-height: 0; }
-
-.gameday-controls { display: flex; justify-content: center; gap: 12px; flex-shrink: 0; }
-.gameday-controls button { min-width: 120px; }
+.gameday-controls { display: flex; justify-content: center; gap: 8px; flex-shrink: 0; }
+.gameday-controls button { min-width: 76px; padding: 8px 12px; }
+.gameday-controls .btn-primary { min-width: 130px; }
 
 /* Live lineup panel */
 .ticker-entry.exhausted { color: var(--muted); font-style: italic; }
 .gd-lineup-title { font-family: var(--font-display); font-size: .74rem; font-weight: 700; letter-spacing: 2px; color: var(--muted); flex-shrink: 0; }
-.gd-lineup { display: flex; flex-direction: column; gap: 4px; }
+.gd-lineup { display: flex; flex-direction: column; gap: 3px; }
 .gdl-row {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px;
-  background: var(--surface2); border: 1px solid var(--border); font-size: .82rem;
-  flex: 1 1 auto; min-height: 40px; /* stretch to fill the column; text stays fixed */
+  display: flex; align-items: center; gap: 8px; padding: 5px 9px; border-radius: 6px;
+  background: var(--surface2); border: 1px solid var(--border); font-size: .8rem;
+  flex: 1 1 auto; min-height: 30px; /* compact; still fills the lineup panel */
 }
 .gdl-row.batting { border-color: var(--gold2); background: rgba(232,160,32,.12); }
 .gdl-row.done { opacity: .5; }
