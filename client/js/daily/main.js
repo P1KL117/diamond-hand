@@ -78,9 +78,10 @@ function seenIntro(markSeen) {
   return introSeenSession; // private mode: don't nag more than once per session
 }
 const HOWTO_CARDS = [
-  { icon: '📋', title: 'Draft a real lineup', body: 'Each day you draft 9 players from the games that were played yesterday. A random team is rolled each round — pick a player and slot them into your batting order.' },
-  { icon: '⚾', title: 'They hit what they really hit', body: "Every player's at-bats play out exactly as they happened in real life. All that matters is who you pick and how you set the order." },
-  { icon: '🏆', title: 'Beat the league', body: 'Score as many runs as you can — and try to outscore every real team that played that day. Then land on the daily leaderboard.' },
+  { icon: '📋', title: 'The idea', body: 'Each day you build a 9-player lineup from batters who actually played in yesterday\'s MLB games — then watch it play out and try to score the most runs.' },
+  { icon: '🎲', title: 'Draft your lineup', body: 'Every round a random team is rolled. Pick one of their players and drop them into an open spot in your batting order. Don\'t like the team? Reroll. Keep going until all 9 spots (C, 1B, 2B … DH) are filled.' },
+  { icon: '⚾', title: 'They hit what they really hit', body: 'Then your lineup plays a 9-inning game — and every player\'s real at-bats from that night fire in order. A homer\'s a homer, a strikeout\'s a strikeout. All that matters is who you drafted and where you bat them.' },
+  { icon: '🏆', title: 'Beat the league', body: 'Score as many runs as you can and try to out-hit every real team that played that day. Post your score to the daily leaderboard — then share it and see if friends can beat you.' },
 ];
 function showHowTo() {
   seenIntro(true);

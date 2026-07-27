@@ -13,10 +13,18 @@
 .home-title { font-family: var(--font-display); font-size: 3.4rem; font-weight: 900; letter-spacing: 2px; line-height: 1; }
 .home-tag { color: var(--muted2); font-size: .96rem; line-height: 1.55; max-width: 440px; }
 .home-howto-link {
+  display: inline-flex; align-items: center; gap: 6px;
   background: none; border: none; color: var(--gold2); font-size: .82rem; font-weight: 600;
-  cursor: pointer; padding: 2px 6px; opacity: .85;
+  cursor: pointer; padding: 2px 6px; opacity: .9;
 }
-.home-howto-link:hover { opacity: 1; text-decoration: underline; }
+.home-howto-link:hover { opacity: 1; }
+.home-howto-link:hover .howto-i { background: var(--gold2); color: #000; }
+.howto-i {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid currentColor;
+  font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 700;
+  font-size: .68rem; line-height: 1;
+}
 .home-date { font-size: .82rem; color: var(--muted); font-weight: 600; letter-spacing: 1px; }
 
 /* How-to-Play intro modal */
