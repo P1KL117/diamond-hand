@@ -3,6 +3,7 @@ import { createDraft } from './draft.js';
 import { playOut } from './playout.js';
 import { seqCodes } from './outcomes.js';
 import { seededRng } from './rng.js';
+import { bestDailyDraft } from './bestdraft.js';
 
 // ── Date helpers ────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -717,6 +718,8 @@ function renderResult(res, lineup) {
   const mb = $('btn-matchups');
   if (mb) mb.addEventListener('click', () => showMatchupsModal(res.runs));
 
+  renderBestDraft(res);
+
   const per = cumulativeInnings(res.log.length);
   const cells = Array.from({ length: 9 }, (_, i) => `<td class="sb-cell">${per[i] != null ? per[i] : ''}</td>`).join('');
   $('result-line').innerHTML = `
@@ -740,6 +743,47 @@ function renderResult(res, lineup) {
     </div>` : '';
 
   $('result-lineup').innerHTML = boxScoreTable(res, lineup);
+}
+
+// Daily-only: how close your draft was to the best achievable one (same tape + rerolls)
+function renderBestDraft(res) {
+  const el = $('result-best');
+  if (!el) return;
+  if (gdState.cadence !== 'daily') { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="best-line">Finding the best possible draft…</div>';
+  // let the result screen paint first, then crunch
+  setTimeout(() => {
+    let best;
+    try { best = bestDailyDraft(pool, gdState.date, gdState.style); } catch { best = null; }
+    if (!best || best.runs < 0) { el.innerHTML = ''; return; }
+    const gap = best.runs - res.runs;
+    const verdict = gap <= 0
+      ? `<span class="best-nailed">🎯 You nailed it — that's the best draft we found.</span>`
+      : `you left <b>${gap}</b> run${gap === 1 ? '' : 's'} on the table`;
+    el.innerHTML = `
+      <div class="best-line">Best possible draft: <b>${best.runs}</b> runs · ${verdict}</div>
+      <button id="btn-ideal" class="btn-secondary best-btn">Show the ideal lineup →</button>`;
+    $('btn-ideal').addEventListener('click', () => showIdealLineupModal(best));
+  }, 30);
+}
+
+function showIdealLineupModal(best) {
+  const rows = best.lineup.map(p => `<tr>
+    <td class="bs-slot">${p.battingSlot}</td><td class="bs-pos">${p.position}</td>
+    <td class="bs-name">${p.name}<span class="bs-team">${p.teamAbbr}</span></td>
+    <td class="bs-line">${p.line?.summary ?? ''}</td></tr>`).join('');
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:480px">
+      <div class="modal-title">Ideal lineup — ${best.runs} runs</div>
+      <div class="modal-subtitle">The best draft + order from your daily tape</div>
+      <div class="result-lineup" style="margin-top:8px"><table class="boxscore-table"><tbody>${rows}</tbody></table></div>
+      <div class="modal-actions"><button class="btn-primary" id="ideal-close">Close</button></div>
+    </div>`;
+  modal.querySelector('#ideal-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  $('app').appendChild(modal);
 }
 
 // Box score table (this sim game's AB/R/H/RBI + real day line) — reused by the

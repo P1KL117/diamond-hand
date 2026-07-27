@@ -125,3 +125,21 @@ export function playOut(lineup) {
     playerStats: byId, mvp, log,
   };
 }
+
+// Lean runs-only simulation — identical scoring to playOut but no log/stats.
+// Used by the best-draft benchmark, where thousands of lineups are evaluated.
+export function simRuns(lineup) {
+  const ptr = lineup.map(() => 0);
+  let occ = [null, null, null], outs = 0, inning = 1, runs = 0, slot = 0;
+  while (inning <= 9) {
+    const player = lineup[slot];
+    let result = ptr[slot] >= player.results.length ? 'K' : player.results[ptr[slot]++];
+    if (result === 'DP' && (occ[0] == null || outs >= 2)) result = 'groundout';
+    const { occ: newOcc, scorers, outsAdded } = advanceRunners(result, occ, outs, player.id);
+    runs += scorers.length;
+    occ = newOcc; outs += outsAdded;
+    if (outs >= 3) { outs = 0; occ = [null, null, null]; inning++; }
+    slot = (slot + 1) % lineup.length;
+  }
+  return runs;
+}

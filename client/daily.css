@@ -328,6 +328,12 @@
 .result-sub { color: var(--muted2); font-size: .9rem; text-align: center; }
 .result-line { width: 100%; overflow-x: auto; }
 
+.result-best { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.best-line { font-size: .9rem; color: var(--muted2); text-align: center; }
+.best-line b { font-family: var(--font-display); color: var(--gold2); font-size: 1.05rem; }
+.best-nailed { color: var(--green); font-weight: 600; }
+.best-btn { padding: 6px 16px; font-size: .82rem; }
+
 .result-league { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .league-line { font-size: .95rem; color: var(--text); }
 .league-line b { font-family: var(--font-display); font-size: 1.15rem; color: var(--gold2); }
