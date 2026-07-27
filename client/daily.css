@@ -247,6 +247,28 @@
   color: var(--gold2); text-align: center; font-family: var(--font-display); font-weight: 700;
   letter-spacing: 1px; font-size: .72rem; margin: 4px 0; opacity: .85;
 }
+.ticker-entry.hr { color: var(--gold2); font-weight: 700; }
+.ticker-entry { animation: tickerIn .18s ease-out; }
+@keyframes tickerIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* runs counter pop when a run scores */
+#gd-runs.pop { animation: runsPop .35s ease-out; }
+@keyframes runsPop { 0% { transform: scale(1); } 40% { transform: scale(1.35); color: var(--green); } 100% { transform: scale(1); } }
+
+/* broadcast-style "at bat" bar */
+.gd-now-batting {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 7px 12px;
+  background: linear-gradient(90deg, rgba(232,160,32,.14), var(--surface2) 60%);
+  border: 1px solid var(--border2); border-left: 3px solid var(--gold); border-radius: 8px;
+  min-height: 40px; overflow: hidden; white-space: nowrap;
+}
+.gd-now-batting:empty { display: none; }
+.nb-label { font-family: var(--font-display); font-size: .58rem; font-weight: 700; letter-spacing: 1.5px; color: var(--gold2); }
+.nb-slot { font-family: var(--font-display); font-weight: 900; color: var(--gold2); }
+.nb-pos { font-family: var(--font-display); font-weight: 700; color: var(--muted2); font-size: .74rem; }
+.nb-name { font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; }
+.nb-team { font-size: .68rem; color: var(--muted); font-family: var(--font-display); font-weight: 700; }
+.nb-line { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: .82rem; color: var(--muted2); }
 
 /* lineup: full width, takes all remaining height */
 .gd-lineup-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }

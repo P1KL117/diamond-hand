@@ -478,21 +478,36 @@ function startGameday() {
     }));
   }
   const res = playOut(lineup);
-  gdState = { res, lineup, i: 0, speed: 1, timer: null, finished: false, lastInning: 0, cadence, style, date: activeDate };
+  gdState = { res, lineup, i: 0, speed: 1, timer: null, finished: false, paused: false, lastInning: 0, cadence, style, date: activeDate };
   // reset visuals
   setBases([false, false, false]);
   setOuts(0);
   setInning(1, true);
   $('gd-runs').textContent = '0';
   $('gd-ticker').innerHTML = '';
-  renderScoreboard([], 0);
-  $('btn-gd-speed').textContent = '▶ 1×';
-  $('btn-gd-speed').style.display = '';
-  $('btn-gd-skip').style.display = '';
+  renderScoreboard([], 0, 0);
+  $('btn-gd-speed').textContent = '1×';
+  $('btn-gd-pause').textContent = '⏸';
+  ['btn-gd-pause', 'btn-gd-next', 'btn-gd-speed', 'btn-gd-skip'].forEach(id => $(id).style.display = '');
   $('btn-gd-results').style.display = 'none';
   renderGdLineup(0);
+  renderNowBatting(res.log[0]);
   show('gameday');
   scheduleNext();
+}
+
+// Broadcast-style "at bat" bar for the batter whose result is showing
+function renderNowBatting(e) {
+  const el = $('gd-now-batting');
+  if (!e) { el.innerHTML = ''; return; }
+  const p = gdState.lineup[e.slot - 1] ?? {};
+  el.innerHTML = `
+    <span class="nb-label">AT BAT</span>
+    <span class="nb-slot">${e.slot}</span>
+    <span class="nb-pos">${p.position ?? ''}</span>
+    <span class="nb-name">${e.player}</span>
+    <span class="nb-team">${p.teamAbbr ?? ''}</span>
+    <span class="nb-line">${p.line?.summary ?? ''}</span>`;
 }
 
 // Live lineup panel: each batter's day sequence + ABs used, current batter hilit
@@ -526,16 +541,29 @@ function renderGdLineup(uptoIndex) {
 
 const SPEED_MS = { 1: 900, 2: 450, 4: 200 };
 function scheduleNext() {
-  if (!gdState || gdState.finished) return;
+  if (!gdState || gdState.finished || gdState.paused) return;
   if (gdState.i >= gdState.res.log.length) { onAnimComplete(); return; }
   gdState.timer = setTimeout(stepGameday, SPEED_MS[gdState.speed]);
+}
+
+// Manual advance — one plate appearance (works whether playing or paused)
+function manualStep() {
+  if (!gdState || gdState.finished) return;
+  clearTimeout(gdState.timer);
+  if (gdState.i >= gdState.res.log.length) { onAnimComplete(); return; }
+  stepGameday(); // reschedules only if not paused
+}
+function togglePause() {
+  if (!gdState || gdState.finished) return;
+  gdState.paused = !gdState.paused;
+  $('btn-gd-pause').textContent = gdState.paused ? '▶' : '⏸';
+  if (gdState.paused) clearTimeout(gdState.timer); else scheduleNext();
 }
 
 // Reached the last play — stop and wait for an explicit "See Results" click.
 function onAnimComplete() {
   gdState.finished = true;
-  $('btn-gd-speed').style.display = 'none';
-  $('btn-gd-skip').style.display = 'none';
+  ['btn-gd-pause', 'btn-gd-next', 'btn-gd-speed', 'btn-gd-skip'].forEach(id => $(id).style.display = 'none');
   $('btn-gd-results').style.display = '';
 }
 
@@ -545,14 +573,19 @@ function stepGameday() {
     addTicker(`─── Inning ${e.inning} ───`, 'inning-divider');
     gdState.lastInning = e.inning;
   }
+  renderNowBatting(e);
   setInning(e.inning, true);
   setBases(e.basesAfter);
   setOuts(e.outsAfter);
-  $('gd-runs').textContent = e.totalRuns;
-  renderScoreboard(cumulativeInnings(gdState.i), e.totalRuns);
+  const runEl = $('gd-runs');
+  runEl.textContent = e.totalRuns;
+  if (e.runsScored) { runEl.classList.remove('pop'); void runEl.offsetWidth; runEl.classList.add('pop'); }
+  renderScoreboard(cumulativeInnings(gdState.i), e.totalRuns, totalHits(gdState.i));
   const runTxt = e.runsScored ? `  +${e.runsScored} run${e.runsScored > 1 ? 's' : ''}` : '';
   if (e.exhausted) {
     addTicker(`${e.player} out — no at-bats left`, 'exhausted');
+  } else if (e.result === 'HR') {
+    addTicker(`💥 ${e.player} homers${runTxt}`, 'run hr');
   } else {
     const verb = RESULT_VERB[e.result] ?? e.result;
     addTicker(`${e.player} ${verb}${runTxt}`, e.runsScored ? 'run' : (isHitResult(e.result) ? 'hit' : ''));
@@ -562,6 +595,11 @@ function stepGameday() {
 }
 
 function isHitResult(r) { return ['HR', 'triple', 'double', 'single'].includes(r); }
+function totalHits(uptoIndex) {
+  let h = 0;
+  for (let k = 0; k < uptoIndex; k++) if (isHitResult(gdState.res.log[k].result)) h++;
+  return h;
+}
 
 // per-inning cumulative runs up to the play index shown
 function cumulativeInnings(uptoIndex) {
@@ -590,10 +628,12 @@ function skipToScore() {
 
 $('btn-gd-skip').addEventListener('click', skipToScore);
 $('btn-gd-results').addEventListener('click', () => finishGameday());
+$('btn-gd-pause').addEventListener('click', togglePause);
+$('btn-gd-next').addEventListener('click', manualStep);
 $('btn-gd-speed').addEventListener('click', () => {
   if (!gdState) return;
   gdState.speed = gdState.speed === 1 ? 2 : gdState.speed === 2 ? 4 : 1;
-  $('btn-gd-speed').textContent = `▶ ${gdState.speed}×`;
+  $('btn-gd-speed').textContent = `${gdState.speed}×`;
 });
 
 // ── Gameday visual helpers ────────────────────────────────────────────────────
@@ -617,13 +657,13 @@ function addTicker(text, type = '') {
   while (log.children.length > 300) log.lastChild.remove();
 }
 
-function renderScoreboard(inningRuns, total) {
+function renderScoreboard(inningRuns, total, hits = 0) {
   const cells = Array.from({ length: 9 }, (_, i) =>
     `<td class="sb-cell">${inningRuns[i] != null ? inningRuns[i] : ''}</td>`).join('');
   $('gd-scoreboard').innerHTML = `
     <table class="sb-table">
-      <thead><tr><th class="sb-team-col"></th>${[1,2,3,4,5,6,7,8,9].map(n => `<th class="sb-cell">${n}</th>`).join('')}<th class="sb-r">R</th></tr></thead>
-      <tbody><tr><td class="sb-team-col">YOU</td>${cells}<td class="sb-r">${total}</td></tr></tbody>
+      <thead><tr><th class="sb-team-col"></th>${[1,2,3,4,5,6,7,8,9].map(n => `<th class="sb-cell">${n}</th>`).join('')}<th class="sb-r">R</th><th class="sb-r">H</th></tr></thead>
+      <tbody><tr><td class="sb-team-col">YOU</td>${cells}<td class="sb-r">${total}</td><td class="sb-r">${hits}</td></tr></tbody>
     </table>`;
 }
 
