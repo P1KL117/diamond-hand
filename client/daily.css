@@ -333,6 +333,7 @@
 .best-line b { font-family: var(--font-display); color: var(--gold2); font-size: 1.05rem; }
 .best-nailed { color: var(--green); font-weight: 600; }
 .best-btn { padding: 6px 16px; font-size: .82rem; }
+.best-locked { font-size: .8rem; color: var(--muted); font-style: italic; }
 
 .result-league { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .league-line { font-size: .95rem; color: var(--text); }
