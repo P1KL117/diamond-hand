@@ -168,6 +168,20 @@ $('btn-setup-start').addEventListener('click', () => { if (selectedTeamIds && se
 const lastName = n => n.split(' ').slice(-1)[0];
 const POS_GROUPS = { IF: ['1B', '2B', '3B', 'SS'], OF: ['LF', 'CF', 'RF'], C: ['C'], DH: ['DH'] };
 const FILTERS = ['ALL', 'IF', 'OF', 'C', 'DH'];
+const SORT_NIGHT = [['tb', 'Total bases'], ['hits', 'Hits'], ['avg', 'AVG (night)'], ['position', 'Position'], ['name', 'Name']];
+const SORT_SEASON = [['s_ops', 'Season OPS'], ['s_hr', 'Season HR'], ['s_rbi', 'Season RBI'], ['s_avg', 'Season AVG'], ['position', 'Position'], ['name', 'Name']];
+// value used by the current sort (night stats normally; season stats in blind)
+function sortKey(p) {
+  switch (draftSort) {
+    case 'hits':  return p.stats.h;
+    case 'avg':   return p.stats.ab ? p.stats.h / p.stats.ab : 0;
+    case 's_ops': return parseFloat(p.season.ops) || 0;
+    case 's_hr':  return p.season.hr;
+    case 's_rbi': return p.season.rbi;
+    case 's_avg': return parseFloat(p.season.avg) || 0;
+    default:      return p.stats.tb; // 'tb'
+  }
+}
 
 function renderDraft() {
   const t = draft.currentTeam;
@@ -184,9 +198,12 @@ function renderDraft() {
     return `<span class="pos-chip ${f ? 'filled' : ''}">${pos}${f ? `<span class="pos-fill">${lastName(f.name)}</span>` : ''}</span>`;
   }).join('');
 
-  // filter chips + sort
+  // filter chips + sort. Blind mode sorts by SEASON stats (night stats are hidden).
   $('draft-filters').innerHTML = FILTERS.map(f =>
     `<button class="fchip ${draftFilter === f ? 'active' : ''}" data-f="${f}">${f}</button>`).join('');
+  const opts = style === 'blind' ? SORT_SEASON : SORT_NIGHT;
+  if (!opts.some(([v]) => v === draftSort)) draftSort = opts[0][0];
+  $('draft-sort').innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $('draft-sort').value = draftSort;
 
   renderBoard();
@@ -247,23 +264,18 @@ function renderBoard() {
   if (draftSort === 'position') {
     const html = [];
     for (const pos of REQUIRED_POSITIONS) {
-      const grp = players.filter(p => p.position === pos).sort((a, b) => b.value - a.value);
+      const grp = players.filter(p => p.position === pos).sort((a, b) => sortKey(b) - sortKey(a));
       if (!grp.length) continue;
       html.push(`<div class="grp-header">${pos} <span class="grp-count">· ${grp.length}</span></div>`);
       html.push(grp.map(rowHtml).join(''));
     }
     board.innerHTML = html.join('') || '<div class="prow-sub" style="padding:10px">No players match.</div>';
   } else {
-    const key = p => {
-      if (draftSort === 'hits') return p.stats.h;
-      if (draftSort === 'avg') return p.stats.ab ? p.stats.h / p.stats.ab : 0;
-      return p.stats.tb; // 'tb' default
-    };
     players.sort((a, b) => {
       const ea = draft.isEligible(a), eb = draft.isEligible(b);
       if (ea !== eb) return ea ? -1 : 1;
       if (draftSort === 'name') return a.name.localeCompare(b.name);
-      return key(b) - key(a);
+      return sortKey(b) - sortKey(a);
     });
     board.innerHTML = players.map(rowHtml).join('') || '<div class="prow-sub" style="padding:10px">No players match.</div>';
   }
